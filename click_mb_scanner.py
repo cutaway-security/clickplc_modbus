@@ -148,7 +148,7 @@ if ((len(sys.argv) < 2) or (len(sys.argv) > 3)):
     sys.exit()
 plc_ip   = sys.argv[1]
 plc_port = 502
-query_type = sys.argv[2]
+if (len(sys.argv) > 2): query_type = sys.argv[2]
 if (plc_ip == 'list' or query_type == 'list'):
     for e in type_names.keys():
         print('%s: %s'%(e,type_names[e]))
