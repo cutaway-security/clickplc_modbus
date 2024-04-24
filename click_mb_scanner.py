@@ -152,6 +152,7 @@ if (len(sys.argv) > 2): query_type = sys.argv[2]
 if (plc_ip == 'list' or query_type == 'list'):
     for e in type_names.keys():
         print('%s: %s'%(e,type_names[e]))
+    sys.exit()
 
 with ModbusClient(plc_ip, retries=3, retry_on_empty=True) as client:
     # Get Coils

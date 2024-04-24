@@ -14,7 +14,6 @@ Interacting with the Automation Direct CLICK PLC using the Modbus protocol to qu
 
 ## Click PLC Modbus Scanner - click_mb_scanner.py
 ### List Memory Types 
-
 `./click_mb_scanner.py list`
 
 or
@@ -33,6 +32,7 @@ or
 * Modbus Map Exported from CLICK PLUS PLC: CLICKPLUS_C2-03CPU-2_w2_C2-08DR-6V_V.7_3.41_Modbus_Addresses.csv
 
 # TODO
+* Fix command line arguments and help
 * Optimize scanner
 * Scan using a user provided tag / coil / register list
 * Script to monitor specific tags, coils, and registers
