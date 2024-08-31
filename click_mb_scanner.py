@@ -16,8 +16,8 @@
 #
 # Usage:
 #         Help: ./click_mb_scanner.py -h
-#                            ./click_mb_scanner.py <ip> list
 #
+#         Custom Modbus TCP Port: ./click_mb_scanner.py <ip> TXT --port 5020
 #         List CPU Input Point Coils: ./click_mb_scanner.py <ip> X0
 #         List Data Float Registers:  ./click_mb_scanner.py <ip> DF
 #

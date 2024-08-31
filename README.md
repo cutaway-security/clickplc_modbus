@@ -61,6 +61,7 @@ options:
 * Modbus Map Exported from CLICK PLUS PLC: CLICKPLUS_C2-03CPU-2_w2_C2-08DR-6V_V.7_3.41_Modbus_Addresses.csv
 
 # TODO
+* Implement several items from the Help Menu: write & value, start address/register, count, verbosity, protocol, and log-file
 * Fix command line arguments and help
 * Optimize scanner
 * Scan using a user provided tag / coil / register list
