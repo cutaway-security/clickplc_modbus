@@ -26,6 +26,7 @@ import os,sys,time,struct
 from pymodbus.client import ModbusTcpClient as ModbusClient
 from pymodbus.exceptions import ModbusException, ModbusIOException
 import argparse
+import re
 
 # Memory Types
 type_names = {
@@ -142,7 +143,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Query Click PLC for Modbus coils and register values.')
 
     # Optional arguments that are only required if --list is not used
-    parser.add_argument('plc_ip', type=str, nargs='?', help='IP address of the Modbus PLC')
+    parser.add_argument('plc_ip', type=validate_ip, nargs='?', help='IP address of the Modbus PLC')
     parser.add_argument('query_type', type=str, nargs='?', choices=set(coil_keys).union(reg_keys), help='Type of query, Coil or Register')
 
     parser.add_argument('--memory-type', type=str, choices=type_names.keys(), help='Type of memory to query')
@@ -154,10 +155,34 @@ def parse_args():
     parser.add_argument('--timeout', type=float, default=3.0, help='Timeout for PLC connection in seconds (Default=3.0)')
     parser.add_argument('--retries', type=int, default=3, help='Number of retries for PLC connection (Default=3)')
     parser.add_argument('--log-file', type=str, help='Path to a log file to write output')
-    parser.add_argument('--port', type=int, default=502, help='Port number for Modbus connection')
+    parser.add_argument('--port', type=validate_port, default=502, help='Port number for Modbus connection')
     parser.add_argument('--protocol', type=str, choices=['tcp', 'rtu'], default='tcp', help='Protocol to use for connection')
 
     return parser.parse_args()
+
+def validate_ip(value):
+    """
+    Validates the IP address format.
+    """
+    ip_regex = re.compile(
+        r'^((25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)\.){3}'
+        r'(25[0-5]|2[0-4][0-9]|[0-1]?[0-9][0-9]?)$'
+    )
+    if not ip_regex.match(value):
+        raise argparse.ArgumentTypeError(f"Invalid IP address format: {value}")
+    return value
+
+def validate_port(value):
+    """
+    Validates the port number.
+    """
+    try:
+        port = int(value)
+        if port < 1 or port > 65535:
+            raise argparse.ArgumentTypeError(f"Port number must be between 1 and 65535: {value}")
+        return port
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Port number must be an integer: {value}")
 
 
 def main():
