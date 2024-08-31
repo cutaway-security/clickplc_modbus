@@ -59,13 +59,13 @@ coil_start_addrs = {
     'CT': 0xC000, 'SC': 0xF000
 }
 
+#Register Addresses
 reg_start_addrs = {
     'DS': 0x0000, 'DD': 0x4000, 'DH': 0x6000, 'DF': 0x7000, 'XD': 0xE000,
     'YD': 0xE200, 'TD': 0xB000, 'CTD': 0xC000, 'SD': 0xF000, 'TXT': 0x9000
 }
 
 # Data Type Sizes
-
 reg_sizes = {
     'DS': 1, 'DD': 2, 'DH': 2, 'DF': 2, 'XD': 2, 'YD': 2, 'TD': 1,
     'CTD': 2, 'SD': 1, 'TXT': 2
@@ -137,34 +137,56 @@ def get_registers(client, query_type):
                     print(f'{query_type}{name_cnt} : {fn:.4f}')
             name_cnt += 1
 
+def parse_args():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Query Click PLC for Modbus coils and register values.')
+    parser.add_argument('plc_ip', type=str, nargs='?', default=None, help='IP address of the Modbus PLC (required if not using --list)')
+    parser.add_argument('--memory-type', type=str, choices=type_names.keys(), help='Type of memory to query')
+    parser.add_argument('--start', type=int, help='Starting address/register')
+    parser.add_argument('--count', type=int, help='Number of registers to read')
+    parser.add_argument('--mode', type=str, choices=['read', 'write'], help='Mode of operation: read or write')
+    parser.add_argument('--value', type=int, help='Value to write (required if mode is write)')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--timeout', type=float, default=3.0, help='Timeout for PLC connection in seconds')
+    parser.add_argument('--log-file', type=str, help='Path to a log file to write output')
+    parser.add_argument('--port', type=int, default=502, help='Port number for Modbus connection')
+    parser.add_argument('--protocol', type=str, choices=['tcp', 'rtu'], default='tcp', help='Protocol to use for connection')
+    parser.add_argument('--list', action='store_true', help='List all available memory types')
+    parser.add_argument('query_type', type=str, nargs='?', default=None, help='Type of query (optional)')
+
+    return parser.parse_args()
+
 
 def main():
-    # Command Line Variables
-    if len(sys.argv) < 2 or len(sys.argv) > 3:
-        print("Check Readme for Usage")
-        sys.exit()
 
-    plc_ip = sys.argv[1]
-    plc_port = 502
-    query_type = sys.argv[2] if len(sys.argv) > 2 else None
+    args = parse_args()
+    
+    # # Command Line Variables
+    # if len(sys.argv) < 2 or len(sys.argv) > 3:
+    #     print("Check Readme for Usage")
+    #     sys.exit()
 
-    if plc_ip == 'list' or query_type == 'list':
-        for e in type_names.keys():
-            print(f'{e}: {type_names[e]}')
-        sys.exit()
+    # plc_ip = sys.argv[1]
+    # plc_port = 502
+    # query_type = sys.argv[2] if len(sys.argv) > 2 else None
+
+    # if plc_ip == 'list' or query_type == 'list':
+    #     for e in type_names.keys():
+    #         print(f'{e}: {type_names[e]}')
+    #     sys.exit()
 
     try:
-        with ModbusClient(plc_ip, port=plc_port, retries=3, retry_on_empty=True) as client:
+        with ModbusClient(args.plc_ip, args.port, retries=3, retry_on_empty=True) as client:
             # Check if the client is connected
             if not client.connect():
                 raise ConnectionException("Failed to connect to Modbus server")
 
             # Get Coils
-            if query_type in coil_keys:
+            if args.query_type in coil_keys:
                 get_coils(client, query_type)
 
             # Get Registers
-            if query_type in reg_keys:
+            if args.query_type in reg_keys:
                 get_registers(client, query_type)
 
     except ConnectionException as e:
