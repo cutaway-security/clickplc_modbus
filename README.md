@@ -8,23 +8,52 @@ Interacting with the Automation Direct CLICK PLC using the Modbus protocol to qu
 # Requirements
 
 * click_mb_scanner.py
-  * [PyModbus](https://pymodbus.readthedocs.io/en/latest/): `pip install pymodbus`
+  * [PyModbus](https://pymodbus.readthedocs.io/en/latest/): 
+  ```bash 
+  pip install -r requirements.txt
+  ```
 
 # Usage:
 
 ## Click PLC Modbus Scanner - click_mb_scanner.py
-### List Memory Types 
-`./click_mb_scanner.py list`
+### Help Menu 
+`./click_mb_scanner.py -h`
 
-or
+```bash
+usage: click_mb_scanner.py [-h] [--start START] [--count COUNT] [--mode {read,write}] [--value VALUE] [--verbose] [--timeout TIMEOUT] [--retries RETRIES] [--log-file LOG_FILE] [--port PORT]
+                           [--protocol {tcp,rtu}]
+                           [plc_ip] {X0,X1,X2,X3,X4,X5,X6,X7,X8,Y0,Y1,Y2,Y3,Y4,Y5,Y6,Y7,Y8,C,T,CT,SC,DS,DD,DH,DF,XD,YD,TD,CTD,SD,TXT}
 
-`./click_mb_scanner.py <ip> list`
+Query Click PLC for Modbus coils and register values.
+
+positional arguments:
+  plc_ip                IP address of the Modbus PLC
+  {X0,X1,X2,X3,X4,X5,X6,X7,X8,Y0,Y1,Y2,Y3,Y4,Y5,Y6,Y7,Y8,C,T,CT,SC,DS,DD,DH,DF,XD,YD,TD,CTD,SD,TXT}
+                        Coil & Register Memory Type to query
+
+options:
+  -h, --help            show this help message and exit
+  --start START         Starting address/register
+  --count COUNT         Number of registers to read
+  --mode {read,write}   Mode of operation: read or write (Default=read)
+  --value VALUE         Value to write (required if mode is write)
+  --verbose             Enable verbose output
+  --timeout TIMEOUT     Timeout for PLC connection in seconds (Default=3.0)
+  --retries RETRIES     Number of retries for PLC connection (Default=3)
+  --log-file LOG_FILE   Path to a log file to write output
+  --port PORT           Port number for Modbus connection
+  --protocol {tcp,rtu}  Protocol to use for connection
+  ```
 
 ### List CPU Input Point Coils
-`./click_mb_scanner.py <ip> X0`
+```bash
+./click_mb_scanner.py <ip> X0
+```
 
 ### List Data Float Registers
-`./click_mb_scanner.py <ip> DF`
+```bash
+./click_mb_scanner.py <ip> DF
+```
 
 # Resources
 
