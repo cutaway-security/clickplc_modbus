@@ -140,19 +140,22 @@ def get_registers(client, query_type):
 def parse_args():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Query Click PLC for Modbus coils and register values.')
-    parser.add_argument('plc_ip', type=str, nargs='?', default=None, help='IP address of the Modbus PLC (required if not using --list)')
+
+    # Optional arguments that are only required if --list is not used
+    parser.add_argument('plc_ip', type=str, nargs='?', help='IP address of the Modbus PLC')
+    parser.add_argument('query_type', type=str, nargs='?', choices=set(coil_keys).union(reg_keys), help='Type of query, Coil or Register')
+
     parser.add_argument('--memory-type', type=str, choices=type_names.keys(), help='Type of memory to query')
     parser.add_argument('--start', type=int, help='Starting address/register')
     parser.add_argument('--count', type=int, help='Number of registers to read')
-    parser.add_argument('--mode', type=str, choices=['read', 'write'], help='Mode of operation: read or write')
+    parser.add_argument('--mode', type=str, choices=['read', 'write'], default='read', help='Mode of operation: read or write (Default=read)')
     parser.add_argument('--value', type=int, help='Value to write (required if mode is write)')
     parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
-    parser.add_argument('--timeout', type=float, default=3.0, help='Timeout for PLC connection in seconds')
+    parser.add_argument('--timeout', type=float, default=3.0, help='Timeout for PLC connection in seconds (Default=3.0)')
+    parser.add_argument('--retries', type=int, default=3, help='Number of retries for PLC connection (Default=3)')
     parser.add_argument('--log-file', type=str, help='Path to a log file to write output')
     parser.add_argument('--port', type=int, default=502, help='Port number for Modbus connection')
     parser.add_argument('--protocol', type=str, choices=['tcp', 'rtu'], default='tcp', help='Protocol to use for connection')
-    parser.add_argument('--list', action='store_true', help='List all available memory types')
-    parser.add_argument('query_type', type=str, nargs='?', default=None, help='Type of query (optional)')
 
     return parser.parse_args()
 
@@ -160,26 +163,18 @@ def parse_args():
 def main():
 
     args = parse_args()
-    
-    # # Command Line Variables
-    # if len(sys.argv) < 2 or len(sys.argv) > 3:
-    #     print("Check Readme for Usage")
-    #     sys.exit()
-
-    # plc_ip = sys.argv[1]
-    # plc_port = 502
-    # query_type = sys.argv[2] if len(sys.argv) > 2 else None
-
-    # if plc_ip == 'list' or query_type == 'list':
-    #     for e in type_names.keys():
-    #         print(f'{e}: {type_names[e]}')
-    #     sys.exit()
+    query_type = args.query_type
+    plc_ip = args.plc_ip
+    port = args.port
+    timeout=args.timeout
+    retries = args.retries
 
     try:
-        with ModbusClient(args.plc_ip, args.port, retries=3, retry_on_empty=True) as client:
+        
+        with ModbusClient(plc_ip, port=port, retries=retries, timeout=timeout) as client:
             # Check if the client is connected
             if not client.connect():
-                raise ConnectionException("Failed to connect to Modbus server")
+                raise ModbusIOException("Failed to connect to Modbus server")
 
             # Get Coils
             if args.query_type in coil_keys:
@@ -189,7 +184,7 @@ def main():
             if args.query_type in reg_keys:
                 get_registers(client, query_type)
 
-    except ConnectionException as e:
+    except ModbusIOException as e:
         print(f"Connection error: {e}")
     except ModbusException as e:
         print(f"Modbus error: {e}")
@@ -206,89 +201,89 @@ if __name__ == '__main__':
 
 
 
-# Command Line Variables
-if ((len(sys.argv) < 2) or (len(sys.argv) > 3)): 
-    print("Check Readme for Usage")
-    sys.exit()
-plc_ip   = sys.argv[1]
-plc_port = 502
-if (len(sys.argv) > 2): query_type = sys.argv[2]
-if (plc_ip == 'list' or query_type == 'list'):
-    for e in type_names.keys():
-        print('%s: %s'%(e,type_names[e]))
-    sys.exit()
+# # Command Line Variables
+# if ((len(sys.argv) < 2) or (len(sys.argv) > 3)): 
+#     print("Check Readme for Usage")
+#     sys.exit()
+# plc_ip   = sys.argv[1]
+# plc_port = 502
+# if (len(sys.argv) > 2): query_type = sys.argv[2]
+# if (plc_ip == 'list' or query_type == 'list'):
+#     for e in type_names.keys():
+#         print('%s: %s'%(e,type_names[e]))
+#     sys.exit()
 
-with ModbusClient(plc_ip, retries=3, retry_on_empty=True) as client:
-    # Get Coils
-    if (query_type in coil_keys):
-        start_addr = coil_start_addrs[query_type]
-        count = type_ranges[query_type][1]
-        # C type has too many coils, split it up
-        if (query_type == 'C'):
-            rfull = []
-            rfull.extend((client.read_coils(start_addr,1000,unit=0x01)).bits)
-            rfull.extend((client.read_coils(1000,1000,unit=0x01)).bits)
-            for e in range(len(rfull)):
-                print('%s%s : %s'%(query_type,e+1,rfull[e]))
-        else:
-            if (query_type[0] == 'X'):
-                r = client.read_discrete_inputs(start_addr,count,unit=0x01)
-            else:
-                r = client.read_coils(start_addr,count,unit=0x01)
-            for b in range(1,count):
-                if (query_type[0] == 'X' or query_type[0] == 'Y'):
-                    print('%s%02d : %s'%(query_type,b,r.bits[b]))
-                else:
-                    print('%s%s : %s'%(query_type,b,r.bits[b]))
-    # Get Registers
-    if (query_type in reg_keys):
-        start_addr = reg_start_addrs[query_type]
-        count      = type_ranges[query_type][1]  
-        name_cnt   = type_ranges[query_type][0]
+# with ModbusClient(plc_ip, retries=3, retry_on_empty=True) as client:
+#     # Get Coils
+#     if (query_type in coil_keys):
+#         start_addr = coil_start_addrs[query_type]
+#         count = type_ranges[query_type][1]
+#         # C type has too many coils, split it up
+#         if (query_type == 'C'):
+#             rfull = []
+#             rfull.extend((client.read_coils(start_addr,1000,unit=0x01)).bits)
+#             rfull.extend((client.read_coils(1000,1000,unit=0x01)).bits)
+#             for e in range(len(rfull)):
+#                 print('%s%s : %s'%(query_type,e+1,rfull[e]))
+#         else:
+#             if (query_type[0] == 'X'):
+#                 r = client.read_discrete_inputs(start_addr,count,unit=0x01)
+#             else:
+#                 r = client.read_coils(start_addr,count,unit=0x01)
+#             for b in range(1,count):
+#                 if (query_type[0] == 'X' or query_type[0] == 'Y'):
+#                     print('%s%02d : %s'%(query_type,b,r.bits[b]))
+#                 else:
+#                     print('%s%s : %s'%(query_type,b,r.bits[b]))
+#     # Get Registers
+#     if (query_type in reg_keys):
+#         start_addr = reg_start_addrs[query_type]
+#         count      = type_ranges[query_type][1]  
+#         name_cnt   = type_ranges[query_type][0]
 
-        # Manage INT values by querying a block at a time
-        if (query_type in ['DS','TD','SD','DH','TXT']):
-            block_size = 100
-            curr_block = 0
-            while (curr_block <= count): 
-                r = client.read_holding_registers(start_addr+curr_block,100,unit=0x01)
-                if r.registers:
-                    for br in r.registers:
-                        if (query_type in ['DS','TD','SD']):
-                            # Print decimal values as decimal
-                            print('%s%s : %d'%(query_type,name_cnt,br))
-                        else:
-                            # Print byte values as hex
-                            print('%s%s : 0x%x'%(query_type,name_cnt,br))
-                        name_cnt = name_cnt + 1
-                curr_block = curr_block + block_size
-        else:
-            # Manage non-INT values
-            for b in range(type_ranges[query_type][0],count + 1,reg_sizes[query_type]):
-                if (query_type == 'XD'):
-                    r = client.read_input_registers(start_addr+b,reg_sizes[query_type],unit=0x01)
-                else:
-                    r = client.read_holding_registers(start_addr+b,reg_sizes[query_type],unit=0x01)
-                if r.registers: 
-                    if (query_type in ['DD','CTD','XD','YD']): 
-                        bl = r.registers
-                        # Returned registers contain two byte values and need to be split
-                        a = []
-                        for reg_val in bl:
-                            for v in reg_val.to_bytes(2,'big'):
-                                a.append(v)
-                        rn = int.from_bytes(a,'big',signed=False)
-                        print('%s%s : %s'%(query_type,name_cnt,rn))
-                    # DF values are floats and need to be converted. 
-                    # Bytes to Float Example: https://gregstoll.com/~gregstoll/floattohex/
-                    # NOTE: there are some rounding differences in the PLC, not sure why
-                    if (query_type == 'DF'):
-                        bl = r.registers
-                        # Returned registers contain two byte values and need to be split
-                        a = []
-                        for reg_val in bl:
-                            for v in reg_val.to_bytes(2,'big'):
-                                a.append(v)
-                        fn = struct.unpack('>f',bytearray(a))[0]
-                        print('%s%s : %04f'%(query_type,name_cnt,fn))
-                name_cnt = name_cnt + 1
+#         # Manage INT values by querying a block at a time
+#         if (query_type in ['DS','TD','SD','DH','TXT']):
+#             block_size = 100
+#             curr_block = 0
+#             while (curr_block <= count): 
+#                 r = client.read_holding_registers(start_addr+curr_block,100,unit=0x01)
+#                 if r.registers:
+#                     for br in r.registers:
+#                         if (query_type in ['DS','TD','SD']):
+#                             # Print decimal values as decimal
+#                             print('%s%s : %d'%(query_type,name_cnt,br))
+#                         else:
+#                             # Print byte values as hex
+#                             print('%s%s : 0x%x'%(query_type,name_cnt,br))
+#                         name_cnt = name_cnt + 1
+#                 curr_block = curr_block + block_size
+#         else:
+#             # Manage non-INT values
+#             for b in range(type_ranges[query_type][0],count + 1,reg_sizes[query_type]):
+#                 if (query_type == 'XD'):
+#                     r = client.read_input_registers(start_addr+b,reg_sizes[query_type],unit=0x01)
+#                 else:
+#                     r = client.read_holding_registers(start_addr+b,reg_sizes[query_type],unit=0x01)
+#                 if r.registers: 
+#                     if (query_type in ['DD','CTD','XD','YD']): 
+#                         bl = r.registers
+#                         # Returned registers contain two byte values and need to be split
+#                         a = []
+#                         for reg_val in bl:
+#                             for v in reg_val.to_bytes(2,'big'):
+#                                 a.append(v)
+#                         rn = int.from_bytes(a,'big',signed=False)
+#                         print('%s%s : %s'%(query_type,name_cnt,rn))
+#                     # DF values are floats and need to be converted. 
+#                     # Bytes to Float Example: https://gregstoll.com/~gregstoll/floattohex/
+#                     # NOTE: there are some rounding differences in the PLC, not sure why
+#                     if (query_type == 'DF'):
+#                         bl = r.registers
+#                         # Returned registers contain two byte values and need to be split
+#                         a = []
+#                         for reg_val in bl:
+#                             for v in reg_val.to_bytes(2,'big'):
+#                                 a.append(v)
+#                         fn = struct.unpack('>f',bytearray(a))[0]
+#                         print('%s%s : %04f'%(query_type,name_cnt,fn))
+#                 name_cnt = name_cnt + 1
