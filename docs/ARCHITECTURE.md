@@ -239,18 +239,43 @@ DF,DF1,0x7000,428673,17096,23.5,Current Temperature
 
 The script accepts CSV files exported from CLICK Programming Software.
 
-### Expected CSV Columns
-- Address (e.g., "DS1", "DF100")
-- Data Type (e.g., "INT", "FLOAT")
-- Modbus Address (HEX or 984 format)
-- Function Code (e.g., "03,06,16")
-- Nickname (user-assigned name)
-- Initial Value
-- Retentive (Yes/No)
-- Address Comment
+### CSV Export Formats
+
+Two export formats are available from CLICK Programming Software:
+
+#### HEX Format
+- Modbus Address uses hex with 'h' suffix (e.g., "0000h", "4001h", "7000h")
+- Parse by stripping 'h' suffix and converting from hexadecimal
+
+#### 984 Format
+- Modbus Address uses decimal (e.g., "100001", "400001", "428673")
+- Standard 984 ranges: FC02 (1xxxxx), FC03 (4xxxxx), FC04 (3xxxxx)
+- CLICK uses non-standard ranges for some coil types (Y, C)
+
+### CSV Columns
+
+| Column | Description | Example |
+|--------|-------------|---------|
+| Address | CLICK address | "X001", "DS1", "DD3" |
+| Data Type | BIT, INT, INT2, FLOAT | "BIT", "INT2", "FLOAT" |
+| Modbus Address | HEX or 984 format | "0000h" or "100001" |
+| Function Code | FC codes (quoted) | "FC=02", "FC=03,06,16" |
+| Nickname | Tag name (may be empty) | "Tank_PSI_Display" |
+| Initial Value | Default value | 0 |
+| Retentive | Memory retention | "Yes", "No" |
+| Address Comment | Description (ignored) | "Tank Pressure Display" |
+
+### Nickname Handling
+- Use Nickname field for display when available
+- For empty nicknames, use CLICK Address as display name
+- Do not truncate nicknames (important info may be at end)
+
+### Test Files
+- docs/CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_HEX_Studentkit.csv
+- docs/CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_984_Studentkit.csv
 
 ### Filtering Logic
-1. Parse CSV file
-2. Extract addresses with non-empty Nickname (indicates configured/used)
+1. Parse CSV file (auto-detect HEX vs 984 format)
+2. Extract all addresses from CSV
 3. Group by address type
-4. Generate scan list
+4. Generate scan list with nicknames

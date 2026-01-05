@@ -126,5 +126,6 @@ clickplc_modbus/
         PLAN.md                  # Project roadmap
         RESUME.md                # Session status
         VIBE_HISTORY.md          # Development lessons
-        [CSV and PDF references]
+        CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_HEX_Studentkit.csv   # Test CSV (HEX format)
+        CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_984_Studentkit.csv   # Test CSV (984 format)
 ```
