@@ -2,11 +2,17 @@
 
 ## Project Overview
 
-A Python script to scan Modbus TCP servers running on AutomationDirect CLICK PLCs. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
+Python scripts to scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
 
 **Repository**: https://github.com/cutaway-security/clickplc_modbus
 **Development Branch**: claude-dev
-**Script Name**: click_modbus_scanner.py
+
+### Scripts
+
+| Script | Protocol | Purpose |
+|--------|----------|---------|
+| click_mb_scanner.py | Modbus TCP | Read coils and registers via Modbus |
+| click_enip_scanner.py | EtherNet/IP CIP | Read assembly data via CIP Explicit Messaging |
 
 ---
 
@@ -14,10 +20,9 @@ A Python script to scan Modbus TCP servers running on AutomationDirect CLICK PLC
 
 Before starting any development session, read these documents in order:
 
-1. **docs/ARCHITECTURE.md** - System design, address mappings, data structures
-2. **docs/PLAN.md** - Project roadmap, current phase, milestones
-3. **docs/RESUME.md** - Development status, what is in progress, blockers
-4. **docs/VIBE_HISTORY.md** - Lessons learned, failed approaches, successful techniques
+1. **ARCHITECTURE.md** - System design, address mappings, data structures
+2. **PLAN.md** - Project roadmap, current phase, milestones
+3. **RESUME.md** - Development status, what is in progress, blockers
 
 **At session start**: Confirm you have read these documents before proceeding.
 
@@ -37,14 +42,26 @@ Before starting any development session, read these documents in order:
 
 ## Technical Constraints
 
+### Modbus Scanner (click_mb_scanner.py)
+
 | Constraint | Value |
 |------------|-------|
 | Python Version | 3.11+ |
 | PyModbus Version | 3.x |
 | Protocol | Modbus TCP only |
+| Port | 502 (default) |
 | Operations | Read-only (FC 01, 02, 03, 04) |
-| Architecture | Single script |
-| Target | One PLC per execution |
+
+### EtherNet/IP Scanner (click_enip_scanner.py)
+
+| Constraint | Value |
+|------------|-------|
+| Python Version | 3.11+ |
+| CPPPO Version | 5.x |
+| Protocol | EtherNet/IP CIP Explicit Messaging |
+| Port | 44818 (default) |
+| Operations | Read-only (Get Attribute Single) |
+| Device Type | Simple CIP device (proxy_simple) |
 
 ---
 
@@ -56,7 +73,7 @@ Before starting any development session, read these documents in order:
 - Include type hints on all function signatures
 - Prefer strong verbs over adjective-heavy descriptions in comments
 - All protocol interactions must respect safety constraints
-- Check for PyModbus at startup with clear error message if missing
+- Check for required libraries at startup with clear error message if missing
 
 ---
 
@@ -78,15 +95,14 @@ When making changes, update the appropriate documents:
 | Architecture change | ARCHITECTURE.md |
 | New phase/milestone | PLAN.md |
 | Session start/end | RESUME.md |
-| Lesson learned | VIBE_HISTORY.md |
 | New dependency | requirements.txt |
-| Usage change | README.md |
+| Usage change | README.md, USAGE.md |
 
 ---
 
 ## Project Scope
 
-### In Scope
+### Modbus Scanner - In Scope
 - Modbus TCP scanning of CLICK PLCs
 - Read operations (coils, discrete inputs, holding registers, input registers)
 - Console, CSV, and Markdown output
@@ -94,13 +110,22 @@ When making changes, update the appropriate documents:
 - Configurable scan rates (normal, moderate, slow)
 - HEX and 984 address format support
 
-### Out of Scope
-- Modbus RTU (serial) support
+### EtherNet/IP Scanner - In Scope
+- EtherNet/IP CIP Explicit Messaging to CLICK PLCs
+- Read Identity Object (device info)
+- Read TCP/IP Interface and Ethernet Link Objects (network info)
+- Read Assembly Objects (configured data blocks)
+- Multi-format data interpretation (INT16, INT32, FLOAT, HEX, ASCII)
+- Console and Markdown output
+- System configuration via hybrid ENIP + Modbus (--sysconfig)
+
+### Out of Scope (Both Scanners)
 - Write operations
 - Multi-PLC scanning
 - Network discovery/subnet scanning
-- Diff/comparison modes
-- Resume/checkpoint capability
+- Modbus RTU (serial) support
+- EtherNet/IP Implicit (I/O) Messaging
+- Tag-based/Symbolic CIP addressing (not supported by CLICK)
 
 ---
 
@@ -108,24 +133,25 @@ When making changes, update the appropriate documents:
 
 Testing will be conducted against:
 - **Hardware**: CLICK PLUS PLC C2-03CPU-2
-- **Protocol**: Modbus TCP on port 502
+- **Modbus**: Port 502
+- **EtherNet/IP**: Port 44818
 
 ---
 
 ## File Structure
 
 ```
-clickplc_modbus/
-    click_modbus_scanner.py      # Main script
-    claude.md                    # This file
-    requirements.txt             # Python dependencies
-    README.md                    # User documentation
-    LICENSE                      # Project license
-    docs/
-        ARCHITECTURE.md          # System design
-        PLAN.md                  # Project roadmap
-        RESUME.md                # Session status
-        VIBE_HISTORY.md          # Development lessons
-        CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_HEX_Studentkit.csv   # Test CSV (HEX format)
-        CLICKPLUS_C2-03CPU-2_3.41_Modbus_Addresses_984_Studentkit.csv   # Test CSV (984 format)
+clickplc_scanner/
+    click_mb_scanner.py       # Modbus TCP scanner (complete)
+    click_enip_scanner.py     # EtherNet/IP CIP scanner (in development)
+    claude.md                 # This file
+    requirements.txt          # Python dependencies
+    README.md                 # User documentation
+    USAGE.md                  # Detailed usage guide
+    LICENSE                   # Project license
+    ARCHITECTURE.md           # System design
+    PLAN.md                   # Project roadmap
+    RESUME.md                 # Session status
+    CLICKPLUS_*.csv           # Test CSV files
+    CLICK_*.pdf               # Reference documentation
 ```

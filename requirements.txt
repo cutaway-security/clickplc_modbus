@@ -1,6 +1,8 @@
-# Click PLC Modbus Scanner Dependencies
+# CLICK PLC Scanner Dependencies
 # Python 3.11+ required
 
-# Modbus TCP communication library
-# Version 3.x has different API from 2.x - do not use 2.x
+# Modbus TCP support (click_mb_scanner.py)
 pymodbus>=3.6.0,<4.0.0
+
+# EtherNet/IP CIP support (click_enip_scanner.py)
+cpppo>=5.0.0

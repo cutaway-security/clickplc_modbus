@@ -4,64 +4,44 @@
 
 | Item | Value |
 |------|-------|
-| Current Phase | 5 - Polish |
-| Current Step | COMPLETE |
+| Current Phase | 1 - ENIP Foundation |
+| Current Step | 1.1 - Project Setup |
 | Blockers | None |
 | Last Session | 2026-01-05 |
 
 ---
 
-## What Was Completed
+## Active Development: EtherNet/IP Scanner
 
-### Session: 2025-01-05 (Initial Setup)
+### Currently Working On
 
-1. Created project documentation structure
-2. Defined architecture in ARCHITECTURE.md
-   - Address type mappings for CLICK PLC
-   - Modbus function code assignments
-   - Data structure definitions
-   - Output format specifications
-3. Created development plan in PLAN.md
-   - Five-phase approach
-   - Detailed task breakdown
-   - Milestones defined
-4. Created RESUME.md and VIBE_HISTORY.md
-5. Created requirements.txt with pymodbus>=3.6.0,<4.0.0
-6. Established incremental workflow (propose-approve-implement-report)
-7. Defined document purposes:
-   - PLAN.md: Primary roadmap, updated as project evolves
-   - RESUME.md: Session state for stop/resume
-   - VIBE_HISTORY.md: Decision log with context and rationale
+**Phase 1.1: Project Setup**
+- [ ] Update claude.md with ENIP scope
+- [ ] Update ARCHITECTURE.md with ENIP design
+- [ ] Update PLAN.md (this file)
+- [ ] Update RESUME.md for ENIP tracking
+- [ ] Add cpppo>=5.0.0 to requirements.txt
 
-**Files Created/Updated**:
-- claude.md
-- docs/ARCHITECTURE.md
-- docs/PLAN.md
-- docs/RESUME.md
-- docs/VIBE_HISTORY.md
-- requirements.txt
+### Next Steps
+
+After Phase 1.1:
+1. Phase 1.2: Test CPPPO library with CLICK PLC
+2. Phase 1.3: Create script skeleton with basic connectivity
 
 ---
 
-## What Is In Progress
+## Completed Work
 
-### Currently Working On
-- ALL PHASES COMPLETE
+### Modbus Scanner (click_mb_scanner.py) - COMPLETE
 
-### Completed Phases
-- Phase 1 (Foundation) - ALL STEPS COMPLETE
-- Phase 2 (Core Scanner) - ALL STEPS COMPLETE
-- Phase 3 (Output and CLI) - ALL STEPS COMPLETE
-- Phase 4 (Configuration) - ALL STEPS COMPLETE
-- Phase 5 (Polish) - ALL STEPS COMPLETE
-  - 5.1 Error Handling (reviewed all paths, helpful messages in place)
-  - 5.2 Documentation (README.md updated, USAGE.md created with CSV export docs)
-  - 5.3 Packaging (requirements.txt verified)
+All phases complete:
+- Phase 1: Foundation
+- Phase 2: Core Scanner
+- Phase 3: Output and CLI
+- Phase 4: Configuration
+- Phase 5: Polish
 
-### Deferred Items
-- --quiet flag for minimal output (not critical for initial release)
-- setup.py/pyproject.toml for pip install (manual pip install works)
-- Version tagging (user action when ready for release)
+See Session Log below for details.
 
 ---
 
@@ -73,6 +53,8 @@ None currently.
 
 ## Questions Resolved
 
+### Modbus Scanner
+
 | Question | Resolution |
 |----------|------------|
 | Protocol scope | Modbus TCP only |
@@ -81,15 +63,30 @@ None currently.
 | Python version | 3.11+ |
 | PyModbus version | 3.x |
 | Script architecture | Single file |
-| Default scan behavior | Common types only (full requires --full) |
-| Type argument format | Comma-separated (DS,DF,C) |
-| Console output format | Tab-separated |
+
+### EtherNet/IP Scanner
+
+| Question | Resolution |
+|----------|------------|
+| Protocol scope | EtherNet/IP CIP Explicit Messaging |
+| Default port | 44818 |
+| Operation mode | Read-only |
+| Library | CPPPO 5.x (proxy_simple) |
+| Script architecture | Single file |
+| Output formats | Console and Markdown (no CSV) |
+| --config conflict | Use --sysconfig for system addresses |
+| Connection support | Both 1 and 2, default to 1 |
+| Data interpretation | Multi-format display (unknown config) |
 
 ---
 
 ## Open Questions
 
-None currently.
+| Question | Context |
+|----------|---------|
+| CPPPO path syntax | Need to verify @class/instance/attribute works |
+| Simple device flag | May need -S flag for CLICK |
+| Assembly size handling | How to handle size mismatch gracefully |
 
 ---
 
@@ -98,67 +95,119 @@ None currently.
 | Item | Status |
 |------|--------|
 | CLICK PLUS C2-03CPU-2 | Available for testing |
-| Network access | To be confirmed |
-| Test project CSV | To be exported |
+| EtherNet/IP Port 44818 | Enabled |
+| Modbus TCP Port 502 | Enabled |
+| CPPPO installed | On development PyEnv |
+| Known ENIP Config | DS1-DS72 + DD3-DD74 = 432 bytes |
 
 ---
 
 ## Session Log
 
-### 2026-01-05 (Phase 5 - Polish)
+### 2026-01-05 (ENIP Planning)
+- Reviewed CLICK EtherNet/IP documentation (Overview, Adapter Setup, Error Codes)
+- Researched CPPPO library capabilities
+- Identified CLICK as "simple" CIP device (no routing, no tag-based messaging)
+- Documented CIP addressing: @4/101/3 for Assembly Instance 101
+- Verified SC/SD system addresses from CSV export:
+  - SC111-SC116: EIP connection status coils (FC 02)
+  - SD80-SD91: Network info (IP, subnet, gateway) (FC 04)
+  - SD101-SD114: EIP status registers (mixed FC 03/04)
+  - SD188-SD193: MAC address (FC 04)
+- Clarified CLI options:
+  - --port for ENIP (default 44818)
+  - --modbus-port for Modbus (default 502)
+  - --sysconfig (not --config) for system addresses
+- Defined multi-format data interpretation strategy
+- Created updated ARCHITECTURE.md with ENIP section
+- Created updated PLAN.md with 6-phase ENIP development
+
+### 2026-01-05 (Modbus Phase 5 - Complete)
 - Completed Phase 5: Polish
 - Updated README.md to be succinct but usable
-- Created USAGE.md with detailed documentation:
-  - Complete CLI reference
-  - Address types table with descriptions
-  - CSV export instructions from CLICK Programming Software
-  - Example commands
-  - Troubleshooting section
-- Reviewed all error handling paths - adequate coverage
-- Verified requirements.txt (pymodbus>=3.6.0,<4.0.0)
-- Updated PLAN.md and RESUME.md to mark project complete
+- Created USAGE.md with detailed documentation
+- Reviewed all error handling paths
+- Verified requirements.txt
 
-### 2026-01-05 (Phase 4)
-- Completed Phase 4: Configuration
-- Implemented parse_click_csv() with auto-detection of HEX vs 984 format
-- Implemented derive_address_type() to extract type from CLICK addresses
-- Implemented extract_used_addresses() to group config entries by type
-- Implemented scan_from_config() to scan only configured addresses
-- Added --config CLI argument
-- Tested with both HEX and 984 format CSV files: 223 addresses scanned correctly
-- Nicknames now display in output when config file is provided
+### 2026-01-05 (Modbus Phases 1-4)
+- Completed all Modbus scanner phases
+- Implemented full CSV parsing with auto-detection
+- Tested against real PLC (192.168.0.10:502)
+- All output formats working (console, CSV, Markdown)
 
-### 2026-01-05 (Phase 3)
-- Completed Phase 3: Output and CLI
-- Implemented console output with dynamic column widths and nickname display
-- Implemented CSV file output with all ScanResult fields
-- Implemented Markdown file output with sections per address type
-- Added CLI arguments: --type, --full, --format, --output, --rate, --list, --timeout
-- Tested all output formats against real PLC (192.168.0.10:502)
-- Updated ARCHITECTURE.md with CSV format documentation
-
-### 2025-01-05
-- Initial project planning session
-- Defined scope and architecture
-- Created documentation framework
-- Implemented Phase 1 (Foundation) and Phase 2 (Core Scanner)
-- Tested all Modbus read operations against real PLC
+### 2025-01-05 (Initial Setup)
+- Created project documentation structure
+- Defined Modbus scanner architecture
+- Established development workflow
 
 ---
 
 ## How to Resume
 
+### For ENIP Development
+
 1. Read CLAUDE.md for project rules
-2. Read ARCHITECTURE.md for design context
-3. Read PLAN.md for current phase and tasks
-4. Check "What Is In Progress" above
+2. Read ARCHITECTURE.md - focus on Part 2 (EtherNet/IP)
+3. Read PLAN.md - current phase is 1 (Foundation)
+4. Check "Currently Working On" above
 5. Continue with next uncompleted task
+
+### For Modbus Maintenance
+
+1. Read CLAUDE.md for project rules
+2. Read ARCHITECTURE.md - Part 1 (Modbus)
+3. Modbus scanner is complete - only bug fixes if needed
 
 ---
 
 ## Files to Review Before Coding
 
-Before starting implementation:
-1. docs/ARCHITECTURE.md - Address mappings, data structures
-2. Original CSVs in docs/ - Verify address ranges
-3. click_modbus_server_supported_function_codes.pdf - Verify FC mappings
+### ENIP Development
+1. ARCHITECTURE.md - Part 2: EtherNet/IP Scanner
+2. CLICK_EtherNet_IP_Overview.pdf - Protocol overview
+3. CLICK_EtherNet_IP_Adapter_Setup.pdf - Configuration details
+4. CLICK_EtherNet_IP_Error_Codes_General_and_Extended_Status.pdf - Error handling
+5. CPPPO GitHub README - API usage
+
+### Reference Files
+- CLICKPLUS_C203CPU2_w2_C208DR6V_3_41_Modbus_Addresses_HEX.csv - Address verification
+- click_mb_scanner.py - Reference implementation patterns
+
+---
+
+## Key ENIP Implementation Notes
+
+### CLICK Limitations
+- Does NOT support Tag-Based (Symbolic) messaging
+- Does NOT support PCCC
+- Maximum 2 concurrent connections
+- Acts as Adapter only (responds, does not initiate)
+
+### CPPPO Usage
+- Use proxy_simple class (not proxy)
+- Path format: @class/instance/attribute
+- Example: @4/101/3 for Assembly Instance 101, Attribute 3
+- May need to test with -S flag for simple device mode
+
+### Known Assembly Configuration
+```
+Connection 1 Input:
+  DS1-DS72:   Bytes 0-143   (144 bytes, INT16)
+  DD3-DD74:   Bytes 144-431 (288 bytes, INT32)
+  Total:      432 bytes
+```
+
+### System Addresses for --sysconfig
+```
+Network (FC 04):
+  SD80-SD83:   IP Address
+  SD84-SD87:   Subnet Mask
+  SD88-SD91:   Gateway
+  SD188-SD193: MAC Address
+
+EIP Status Coils (FC 02):
+  SC111-SC116: Connection status
+
+EIP Status Registers (Mixed FC):
+  SD101-SD114: Module/connection status
+```
