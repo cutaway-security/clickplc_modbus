@@ -698,6 +698,553 @@ python click_enip_scanner.py 192.168.0.10 --timeout 15 --full
 
 ---
 
+## Session: 2026-01-06 (NSE Script - Phase 3 ENIP UDP)
+
+### Context
+Implementing EtherNet/IP List Identity over UDP and testing PLC RUN/STOP mode detection.
+
+### Implementation Details
+
+**Function Implemented:**
+- `enip_scan_udp(host, port)` - UDP socket handling with try/catch pattern
+
+**Key Differences from TCP:**
+```lua
+-- TCP socket creation
+socket = nmap.new_socket()
+
+-- UDP socket creation
+socket = nmap.new_socket("udp")
+```
+
+**Action Function Update:**
+- Added `is_udp` check: `use_udp or (port.protocol == "udp")`
+- Routes to `enip_scan_udp()` when UDP flag set or port scanned via -sU
+
+### Test Results
+
+**UDP Scan (--script-args='click-plc-info.udp=true'):**
+- Successfully sends/receives via UDP even when port scanned as TCP
+- Response identical to TCP (80 bytes, same parsed values)
+- Debug output confirms UDP code path execution
+
+**RUN vs STOP Mode Testing:**
+
+User switched PLC between RUN and STOP modes via hardware switch.
+
+| Field | RUN Mode | STOP Mode | Changed? |
+|-------|----------|-----------|----------|
+| Vendor | 482 | 482 | No |
+| Device Type | 43 | 43 | No |
+| Product Name | CLICK C2-03CPU-2 | CLICK C2-03CPU-2 | No |
+| Serial Number | 0x35bf2b44 | 0x35bf2b44 | No |
+| Product Code | 634 | 634 | No |
+| Revision | 1.1 | 1.1 | No |
+| **Status** | **0x0030** | **0x0030** | **No** |
+| **State** | **0xff** | **0xff** | **No** |
+| Device IP | 192.168.0.10 | 192.168.0.10 | No |
+
+### Key Finding: ENIP Does Not Expose PLC Mode
+
+The EtherNet/IP List Identity response Status and State fields do **not** change when the CLICK PLC switches between RUN and STOP modes.
+
+**Additional Testing: CIP Get_Attribute_Single**
+
+Based on user research suggesting Identity Object Status (Class 0x01, Attribute 0x05) should expose RUN/STOP mode, tested with pycomm3:
+
+```python
+result = plc.generic_message(
+    service=0x0E,       # Get Attribute Single
+    class_code=0x01,    # Identity Object
+    instance=0x01,
+    attribute=0x05,     # Status attribute
+)
+```
+
+| Mode | Status | Bits 4-7 | CIP Interpretation |
+|------|--------|----------|-------------------|
+| RUN | 0x0030 | 3 | "Operational" |
+| STOP | 0x0030 | 3 | "Operational" |
+
+**Result:** CIP explicit messaging to Identity Object Status also does NOT change between RUN/STOP modes. The "Operational" state (bits 4-7 = 3) refers to the EtherNet/IP adapter being operational, not PLC program execution.
+
+**Implications:**
+1. Cannot determine PLC operating mode via ENIP List Identity
+2. Cannot determine PLC operating mode via CIP Get_Attribute_Single on Identity Object
+3. Must use Modbus SD registers to read PLC mode (Phase 5)
+4. Status 0x0030 indicates EtherNet/IP adapter is operational
+5. State 0xff in List Identity appears to be CLICK-specific (typical CIP: 0x00-0x03)
+6. Alternative (SC1/SC2 mapped to ENIP I/O) requires pre-configuration, not usable for scanner
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Check both use_udp flag and port.protocol | Handles both explicit flag and nmap -sU scans |
+| Reuse parse_enip_response() for UDP | Same packet format regardless of transport |
+| Document RUN/STOP finding | Important for users expecting mode detection |
+
+### Lessons Learned
+
+1. **ENIP List Identity is transport-agnostic**
+   - Same 24-byte request works for TCP and UDP
+   - Same response parsing for both transports
+
+2. **CIP Status/State fields vary by vendor**
+   - CLICK uses State 0xff (non-standard)
+   - Status 0x0030 does not reflect operating mode
+   - Vendor-specific behavior should be documented
+
+3. **Hardware testing reveals protocol limitations**
+   - Without RUN/STOP test, we might have assumed Status reflected mode
+   - Real hardware testing is essential for accurate documentation
+
+---
+
+## Session: 2026-01-05 (NSE Script - Phase 2 ENIP TCP)
+
+### Context
+Implementing EtherNet/IP List Identity request/response over TCP for click-plc-info.nse.
+
+### Implementation Details
+
+**Functions Implemented:**
+- `vendor_lookup(vennum)` - Returns vendor name from ID or "Unknown Vendor"
+- `device_type_lookup(devtype)` - Returns device type from ID or "Unknown Device Type"
+- `form_enip_list_identity()` - Returns 24-byte List Identity packet (hex: 63000000...)
+- `parse_enip_response(response)` - Parses full response, returns output table
+- `enip_scan_tcp(host, port)` - Socket handling with try/catch pattern
+
+**Response Parsing (parse_enip_response):**
+- Validates minimum length (27 bytes for header, 63+ for full parse)
+- Validates command byte == 0x63 (List Identity)
+- Validates type ID byte == 0x0C (Identity item)
+- Parses fields using string.unpack() with little-endian format
+- Uses ipOps.fromdword() for IP address conversion
+
+**Field Offsets (1-indexed for Lua):**
+| Field | Offset | Format | Size |
+|-------|--------|--------|------|
+| Command | 1 | B | 1 byte |
+| Type ID | 27 | B | 1 byte |
+| Device IP | 37 | >I4 (big-endian) | 4 bytes |
+| Vendor ID | 49 | <I2 (little-endian) | 2 bytes |
+| Device Type | 51 | <I2 | 2 bytes |
+| Product Code | 53 | <I2 | 2 bytes |
+| Revision | 55 | BB | 2 bytes |
+| Status | 57 | <I2 | 2 bytes |
+| Serial Number | 59 | <I4 | 4 bytes |
+| Product Name | 63 | s1 (length-prefixed) | variable |
+| State | after name | B | 1 byte |
+
+### Test Results Against Real PLC (192.168.0.10:44818)
+
+| Field | Value |
+|-------|-------|
+| Vendor | Koyo Electronics (AutomationDirect) (482) |
+| Device Type | Generic Device (keyable) (43) |
+| Product Name | CLICK C2-03CPU-2 |
+| Serial Number | 0x35bf2b44 |
+| Product Code | 634 |
+| Revision | 1.1 |
+| Status | 0x0030 |
+| State | 0xff |
+| Device IP | 192.168.0.10 |
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Use try/catch pattern from enip-info.nse | Ensures socket cleanup on errors |
+| Set port.version.name on success | Updates nmap service detection |
+| Return nil on parse failure | Standard NSE pattern for no results |
+| Use stdnse.debug1() for debug output | Nmap standard for script debugging |
+
+### Observations
+
+1. **CLICK uses Vendor ID 482 (Koyo), not 898**
+   - Koyo Electronics is AutomationDirect's PLC brand
+   - Good decision to include both in vendor table
+
+2. **Device Type is 43 (Generic Device keyable)**
+   - Not 14 (PLC) as might be expected
+   - Added type 43 to device_type table in Phase 1
+
+3. **State value is 0xff**
+   - Different from typical 0x03 seen in enip-info.nse examples
+   - May be CLICK-specific
+
+---
+
+## Session: 2026-01-05 (NSE Script - Phase 1 Script Skeleton)
+
+### Context
+Creating the NSE script skeleton for click-plc-info.nse with standard headers, portrule, arguments, and action stub.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Include both vendor IDs 898 and 482 | 898 = AutomationDirect official, 482 = Koyo Electronics (AutomationDirect brand) |
+| Categories: discovery, version | Read-only script, not intrusive |
+| Port-based routing in action() | Simple dispatch based on port 502 vs 44818 |
+| Placeholder output during development | Allows testing script loading before protocol implementation |
+| Minimal vendor/device tables | Only include common PLC vendors, not exhaustive list |
+
+### Implementation Details
+
+**Script Structure:**
+- Headers: description, usage, output examples, author, license, categories
+- Requirements: comm, nmap, shortport, stdnse, string, table
+- Portrule: shortport.port_or_service({502, 44818}, {"modbus", "EtherNet-IP-2"}, {"tcp", "udp"})
+- Lookup tables: vendor_id (7 entries), device_type (7 entries), modbus_exception (10 entries)
+- Action: argument parsing, port-based routing, placeholder output
+
+**Script Arguments (6 total):**
+- modbus-only: Skip ENIP scan
+- enip-only: Skip Modbus scan
+- unit-id: Modbus Unit ID (default 0)
+- coil-count: X/Y coil count (default 10)
+- reg-count: DS/DD register count (default 10)
+- udp: Use UDP for ENIP (default false)
+
+### Reference Scripts Reviewed
+
+**modbus-discover.nse:**
+- Uses comm.exchange() for simple request/response
+- form_rsid() builds MBAP + PDU frame
+- modbus_exception_codes table for error messages
+- Iterates through slave IDs (1-246)
+
+**enip-info.nse:**
+- Extensive vendor_id table (1500+ entries)
+- List Identity query as hex string
+- string.unpack() for response parsing
+- nmap.new_socket() with explicit timeout
+
+### Lessons Learned
+
+1. **NSE Script Categories Matter**
+   - "intrusive" category for scripts that may affect device state
+   - "discovery, version" for read-only information gathering
+   - CLICK script is read-only, so "discovery, version" is appropriate
+
+2. **Vendor ID Tables Can Vary**
+   - enip-info.nse lists 482 as "Koyo Electronics"
+   - Koyo is AutomationDirect's PLC brand
+   - Include both 898 (official) and 482 (Koyo) for compatibility
+
+3. **Placeholder Pattern for Incremental Development**
+   - Return stdnse.output_table() with status message
+   - Allows testing script loading before full implementation
+   - Clear TODO markers for unimplemented sections
+
+---
+
+## Session: 2026-01-06 (NSE Script - Phase 5 Modbus Device Info)
+
+### Context
+Implementing the modbus_scan() function to read device information from SD registers and basic I/O data from X/Y coils and DS/DD registers.
+
+### Implementation Details
+
+**Main Function:**
+```lua
+local function modbus_scan(host, port, unit_id, coil_count, reg_count)
+    -- SD Register addresses (base 0xF000)
+    local SD_FIRMWARE = 0xF004   -- SD5-SD8
+    local SD_IP = 0xF04F         -- SD80-SD83
+    local SD_SUBNET = 0xF053     -- SD84-SD87
+    local SD_GATEWAY = 0xF057    -- SD88-SD91
+    local SD_EIP_STATUS = 0xF064 -- SD101-SD102
+    local SD_MAC = 0xF0BB        -- SD188-SD193
+
+    -- I/O addresses
+    local X_BASE = 0x0000        -- X inputs (FC 02)
+    local Y_BASE = 0x2000        -- Y outputs (FC 01)
+    local DS_BASE = 0x0000       -- DS registers (FC 03)
+    local DD_BASE = 0x4000       -- DD registers (FC 03)
+    ...
+end
+```
+
+**Key Code Changes:**
+1. Moved data conversion functions (bytes_to_int16, bytes_to_int32, format_ip, format_mac, format_firmware) BEFORE modbus_scan() - Lua requires functions to be declared before use
+2. Added got_data and got_device_info flags to track success - stdnse.output_table() doesn't work with next() for iteration
+3. IP/Subnet/Gateway stored as 4 registers, one byte per register's low byte
+4. MAC stored as 6 registers, one byte per register's low byte
+
+### Test Results Against Real PLC (192.168.0.10)
+
+**Port 502 (Modbus):**
+| Field | Value |
+|-------|-------|
+| Firmware | 3.41 |
+| IP Address | 192.168.0.10 |
+| Subnet Mask | 255.255.255.0 |
+| Gateway | 0.0.0.0 |
+| MAC Address | 00:D0:7C:1A:42:44 |
+| EIP Enabled | No (Status: 0x0000) |
+| X Inputs | 0 0 0 0 0 0 0 0 0 0 |
+| Y Outputs | 0 1 1 1 0 0 0 0 0 0 |
+| DS Registers | 0, 0, 422, 0, 5, 252, 30, 0, 0, 0 |
+| DD Registers | 0, 0, 422400000, 117333, 0, 0, 0, 0, 0, 0 |
+
+**Port 44818 (ENIP):**
+| Field | Value |
+|-------|-------|
+| Vendor | Koyo Electronics (AutomationDirect) (482) |
+| Product Name | CLICK C2-03CPU-2 |
+| Revision | 1.1 |
+
+### Firmware Version Format (Corrected)
+
+**Observation:** SD5-SD6 returns raw bytes `00 29 00 03`:
+- SD5 = 0x0029 = 41 (minor version)
+- SD6 = 0x0003 = 3 (major version)
+
+**Correct Interpretation:**
+- Firmware version = major.minor = SD6.SD5 = 3.41
+- CLICK stores minor version in SD5, major version in SD6
+- Only 2 registers needed (SD5-SD6), not 4
+
+**ENIP Revision Clarification:**
+- ENIP List Identity "Revision: 1.1" is the ENIP protocol version
+- This is NOT the PLC firmware version
+- PLC firmware must be read via Modbus SD registers
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Use explicit flags instead of next() | stdnse.output_table() doesn't iterate with next() |
+| Move conversion functions before scan | Lua requires declaration before use |
+| IP/MAC as separate registers | CLICK stores network info as individual bytes in register low bytes |
+| Keep firmware display despite uncertainty | Better to show something than nothing; can be refined |
+
+### Lessons Learned
+
+1. **stdnse.output_table() is not a regular table**
+   - Cannot use `next(output_table)` to check for content
+   - Must track success with explicit boolean flags
+
+2. **Lua function ordering matters**
+   - Local functions must be declared before they're called
+   - Reorganize code to ensure dependencies are met
+
+3. **SD Register format may vary by model**
+   - Documentation may not match actual register layout
+   - Compare with ENIP data when possible
+   - Raw hex dump useful for debugging
+
+4. **CLICK stores network info unusually**
+   - IP/Subnet/Gateway use 4 registers with one byte each in low position
+   - MAC uses 6 registers similarly
+   - Extract with string.byte(data, offset) for low byte
+
+5. **CLICK firmware version format**
+   - SD5 = minor version, SD6 = major version
+   - Display as major.minor (e.g., 3.41)
+   - ENIP Revision field is ENIP protocol version, not PLC firmware
+
+---
+
+## Session: 2026-01-06 (NSE Script - Phase 4 Modbus Helpers)
+
+### Context
+Implementing Modbus TCP helper functions for the NSE script to enable communication with CLICK PLCs.
+
+### Implementation Details
+
+**Core Functions Implemented:**
+
+1. **form_modbus_request(uid, fc, addr, qty)**
+   - Builds MBAP header (7 bytes) + PDU
+   - Uses string.pack() with big-endian format (>I2)
+   - Maintains transaction_id counter for request tracking
+
+```lua
+local function form_modbus_request(uid, fc, addr, qty)
+    transaction_id = (transaction_id + 1) % 65536
+    local pdu_length = 6
+    local packet = string.pack(">I2 >I2 >I2 B B >I2 >I2",
+        transaction_id, 0x0000, pdu_length, uid, fc, addr, qty)
+    return packet
+end
+```
+
+2. **parse_modbus_response(response, expected_fc)**
+   - Validates response length (minimum 9 bytes)
+   - Detects exception responses (FC + 0x80)
+   - Returns data bytes or nil + error message
+
+3. **Read Wrapper Functions**
+   - read_coils(socket, uid, addr, qty) - FC 01
+   - read_discrete_inputs(socket, uid, addr, qty) - FC 02
+   - read_holding_registers(socket, uid, addr, qty) - FC 03
+   - read_input_registers(socket, uid, addr, qty) - FC 04
+
+4. **Data Conversion Functions**
+   - bytes_to_int16(b1, b2) - Signed 16-bit with overflow handling
+   - bytes_to_int32(b1, b2, b3, b4) - Signed 32-bit, little-endian word order
+   - format_ip(b1, b2, b3, b4) - IP address string formatting
+   - format_mac(b1, b2, b3, b4, b5, b6) - MAC address string formatting
+   - format_firmware(b1, b2, b3, b4) - Version string from 4 bytes
+
+### Test Results Against Real PLC (192.168.0.10:502)
+
+| Function Code | Target | Result |
+|---------------|--------|--------|
+| FC 01 (Read Coils) | Y001-Y010 | 0 1 1 1 0 0 0 0 0 0 |
+| FC 02 (Read Discrete Inputs) | X001-X010 | 0 0 0 0 0 0 0 0 0 0 |
+| FC 03 (Read Holding Registers) | DS1-DS10 | 0, 0, 422, 0, 6, 252, 30, 0, 0, 0 |
+| FC 04 (Read Input Registers) | - | Functional |
+
+### Technical Notes
+
+1. **MBAP Header Format**
+   ```
+   Transaction ID: 2 bytes (big-endian, incremented per request)
+   Protocol ID: 2 bytes (0x0000 for Modbus)
+   Length: 2 bytes (remaining bytes including Unit ID)
+   Unit ID: 1 byte
+   ```
+
+2. **Exception Detection**
+   - Exception response: Function Code = expected_fc + 0x80
+   - Exception code in byte 9 of response
+   - Lookup via modbus_exception table
+
+3. **Signed Integer Conversion**
+   - INT16: Values >= 32768 become negative (val - 65536)
+   - INT32: Values >= 2147483648 become negative (val - 4294967296)
+
+4. **Word Order for 32-bit Values**
+   - CLICK uses little-endian word order: low word at lower address
+   - Reassemble: (high_word * 65536) + low_word
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Global transaction_id counter | Simple, sufficient for single-threaded NSE execution |
+| Return nil + error on parse failure | Standard Lua pattern for error handling |
+| Separate read functions per FC | Cleaner API, matches Modbus specification |
+| Validate response length first | Prevents string.unpack errors on truncated responses |
+
+### Lessons Learned
+
+1. **string.pack/unpack Format Specifiers**
+   - `>I2` = big-endian unsigned 16-bit
+   - `<I2` = little-endian unsigned 16-bit
+   - `B` = unsigned byte
+   - Spacing optional but improves readability
+
+2. **Modbus Exception Handling**
+   - Exception code 0x02 (Illegal Data Address) common for invalid ranges
+   - Exception code 0x03 (Illegal Data Value) for out-of-bounds counts
+   - Always check FC in response matches expected before parsing data
+
+3. **Testing with Temporary action() Code**
+   - Temporary test code in action() useful for validation
+   - Remove before production release
+   - Keep test output informative but concise
+
+---
+
+## Session: 2026-01-06 (NSE Script - Phase 6 Integration and Polish)
+
+### Context
+Final phase of NSE script development: argument validation, documentation updates, and final testing.
+
+### Implementation Details
+
+**Argument Validation Added:**
+```lua
+-- Validate arguments
+if unit_id < 0 or unit_id > 247 then
+    stdnse.debug1("Invalid unit-id %d, using default 0", unit_id)
+    unit_id = 0
+end
+if coil_count < 1 or coil_count > 100 then
+    stdnse.debug1("Invalid coil-count %d, clamping to 1-100", coil_count)
+    coil_count = math.max(1, math.min(100, coil_count))
+end
+if reg_count < 1 or reg_count > 100 then
+    stdnse.debug1("Invalid reg-count %d, clamping to 1-100", reg_count)
+    reg_count = math.max(1, math.min(100, reg_count))
+end
+```
+
+**Documentation Updates:**
+- README.md: Added NSE Script section with features, quick start, arguments, and example output
+- USAGE.md: Added comprehensive NSE section with installation, arguments, output format, examples, and troubleshooting
+
+### Final Test Results
+
+**Dual-Port Scan (502 + 44818):**
+```
+PORT      STATE SERVICE
+502/tcp   open  modbus
+| click-plc-info:
+|   Device Information:
+|     Firmware: 3.41
+|     IP Address: 192.168.0.10
+|     MAC Address: 00:D0:7C:1A:42:44
+|   Inputs (X001-X010): 0 0 0 0 0 0 0 0 0 0
+|   Outputs (Y001-Y010): 0 1 1 1 0 0 0 0 0 0
+|   DS Registers (DS1-DS10): 0, 0, 422, 0, 5, 252, 30, 0, 0, 0
+|_  DD Registers (DD1-DD10): 0, 0, 422400000, 117333, 0, 0, 0, 0, 0, 0
+44818/tcp open  EtherNet-IP-2
+| click-plc-info:
+|   Vendor: Koyo Electronics (AutomationDirect) (482)
+|   Product Name: CLICK C2-03CPU-2
+|_  Device IP: 192.168.0.10
+```
+
+**Custom Arguments Test:**
+- `--script-args='click-plc-info.coil-count=20,click-plc-info.reg-count=5'`: Correctly shows X001-X020, Y001-Y020, DS1-DS5, DD1-DD5
+- `--script-args='click-plc-info.modbus-only=true'`: Skips ENIP output
+- `--script-args='click-plc-info.coil-count=200,click-plc-info.unit-id=255'`: Validated and clamped with debug messages
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Clamp values instead of rejecting | User-friendly, script continues to work |
+| Log validation issues to debug | Visible with -d flag, doesn't clutter normal output |
+| Comprehensive USAGE.md | Single reference for all scanner tools |
+
+### Lessons Learned
+
+1. **Argument validation prevents unexpected behavior**
+   - Invalid coil-count could cause Modbus exceptions
+   - Invalid unit-id could prevent communication
+   - Clamping with debug logging is user-friendly
+
+2. **Documentation should be comprehensive**
+   - Include installation instructions
+   - Document all arguments with defaults and ranges
+   - Provide troubleshooting section for common issues
+
+3. **Test all argument combinations**
+   - Valid arguments
+   - Invalid arguments (out of range)
+   - Combined arguments
+   - Protocol-specific flags (modbus-only, enip-only)
+
+### Project Completion
+
+All three scanning tools are now complete:
+
+| Tool | Protocol | Status |
+|------|----------|--------|
+| click_mb_scanner.py | Modbus TCP | COMPLETE |
+| click_enip_scanner.py | EtherNet/IP CIP | COMPLETE |
+| click-plc-info.nse | Modbus + ENIP | COMPLETE |
+
+---
+
 ## Future Considerations
 
 Items that may be useful but are currently out of scope:

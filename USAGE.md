@@ -19,6 +19,12 @@
   - [ENIP Examples](#enip-examples)
   - [ENIP Troubleshooting](#enip-troubleshooting)
   - [CIP Protocol Reference](#cip-protocol-reference)
+- [Nmap NSE Script](#nmap-nse-script-click-plc-infonse)
+  - [NSE Basic Usage](#nse-basic-usage)
+  - [NSE Script Arguments](#nse-script-arguments)
+  - [NSE Output](#nse-output)
+  - [NSE Examples](#nse-examples)
+  - [NSE Troubleshooting](#nse-troubleshooting)
 
 ---
 
@@ -649,3 +655,229 @@ All CIP data uses little-endian byte order:
 - 16-bit values: Low byte first
 - 32-bit values: Low word first
 - IP addresses: Reversed (e.g., 192.168.0.10 stored as 10.0.168.192)
+
+---
+
+# Nmap NSE Script (click-plc-info.nse)
+
+The Nmap NSE script provides combined Modbus TCP and EtherNet/IP scanning in a single script, suitable for network-wide ICS assessments.
+
+## NSE Basic Usage
+
+### Installation
+
+Copy `click-plc-info.nse` to one of:
+- Current directory (use `--script ./click-plc-info.nse`)
+- Nmap scripts directory (`/usr/share/nmap/scripts/`)
+- Custom scripts directory
+
+### Scan Both Protocols
+
+```bash
+nmap --script click-plc-info -p 502,44818 192.168.0.10
+```
+
+### Scan Modbus Only
+
+```bash
+nmap --script click-plc-info -p 502 192.168.0.10
+```
+
+### Scan EtherNet/IP Only
+
+```bash
+nmap --script click-plc-info -p 44818 192.168.0.10
+```
+
+---
+
+## NSE Script Arguments
+
+All arguments are prefixed with `click-plc-info.`:
+
+| Argument | Default | Range | Description |
+|----------|---------|-------|-------------|
+| `modbus-only` | false | - | Skip ENIP scan when both ports specified |
+| `enip-only` | false | - | Skip Modbus scan when both ports specified |
+| `unit-id` | 0 | 0-247 | Modbus Unit ID |
+| `coil-count` | 10 | 1-100 | Number of X/Y coils to read |
+| `reg-count` | 10 | 1-100 | Number of DS/DD registers to read |
+| `udp` | false | - | Use UDP for ENIP instead of TCP |
+
+### Argument Usage
+
+```bash
+# Custom coil and register counts
+nmap --script click-plc-info -p 502 192.168.0.10 \
+  --script-args='click-plc-info.coil-count=20,click-plc-info.reg-count=20'
+
+# Different Modbus Unit ID
+nmap --script click-plc-info -p 502 192.168.0.10 \
+  --script-args='click-plc-info.unit-id=1'
+
+# ENIP over UDP
+nmap --script click-plc-info -p 44818 192.168.0.10 \
+  --script-args='click-plc-info.udp=true'
+
+# Skip ENIP when scanning both ports
+nmap --script click-plc-info -p 502,44818 192.168.0.10 \
+  --script-args='click-plc-info.modbus-only=true'
+```
+
+---
+
+## NSE Output
+
+### Modbus Output (Port 502)
+
+```
+PORT    STATE SERVICE
+502/tcp open  modbus
+| click-plc-info:
+|   Device Information:
+|     Firmware: 3.41
+|     IP Address: 192.168.0.10
+|     Subnet Mask: 255.255.255.0
+|     Gateway: 0.0.0.0
+|     MAC Address: 00:D0:7C:1A:42:44
+|     EIP Enabled: No (Status: 0x0000)
+|   Inputs (X001-X010): 0 0 0 0 0 0 0 0 0 0
+|   Outputs (Y001-Y010): 0 1 1 1 0 0 0 0 0 0
+|   DS Registers (DS1-DS10): 0, 0, 422, 0, 5, 252, 30, 0, 0, 0
+|_  DD Registers (DD1-DD10): 0, 0, 422400000, 117333, 0, 0, 0, 0, 0, 0
+```
+
+### Device Information Fields
+
+| Field | Source | Description |
+|-------|--------|-------------|
+| Firmware | SD5-SD6 | PLC firmware version (major.minor) |
+| IP Address | SD80-SD83 | Configured IP address |
+| Subnet Mask | SD84-SD87 | Network subnet mask |
+| Gateway | SD88-SD91 | Default gateway |
+| MAC Address | SD188-SD193 | Ethernet MAC address |
+| EIP Enabled | SD101-SD102 | EtherNet/IP status |
+
+### EtherNet/IP Output (Port 44818)
+
+```
+PORT       STATE SERVICE
+44818/tcp  open  EtherNet-IP-2
+| click-plc-info:
+|   Vendor: Koyo Electronics (AutomationDirect) (482)
+|   Device Type: Generic Device (keyable) (43)
+|   Product Name: CLICK C2-03CPU-2
+|   Serial Number: 0x35bf2b44
+|   Product Code: 634
+|   Revision: 1.1
+|   Status: 0x0030
+|   State: 0xff
+|_  Device IP: 192.168.0.10
+```
+
+### ENIP Fields
+
+| Field | Description |
+|-------|-------------|
+| Vendor | CIP vendor ID and name |
+| Device Type | CIP device type ID and name |
+| Product Name | Product identification string |
+| Serial Number | Device serial number (hex) |
+| Product Code | Vendor-specific product code |
+| Revision | ENIP protocol revision (not firmware) |
+| Status | Device status word |
+| State | Device state byte |
+| Device IP | Embedded IP address from response |
+
+---
+
+## NSE Examples
+
+### Quick Network Scan
+
+```bash
+# Scan subnet for CLICK PLCs
+nmap --script click-plc-info -p 502,44818 192.168.0.0/24
+```
+
+### Detailed Scan with Debug Output
+
+```bash
+nmap --script click-plc-info -p 502,44818 192.168.0.10 -d
+```
+
+### Read More I/O Points
+
+```bash
+nmap --script click-plc-info -p 502 192.168.0.10 \
+  --script-args='click-plc-info.coil-count=36,click-plc-info.reg-count=50'
+```
+
+### UDP ENIP Scan
+
+```bash
+nmap --script click-plc-info -sU -p 44818 192.168.0.10 \
+  --script-args='click-plc-info.udp=true'
+```
+
+### Save Results to XML
+
+```bash
+nmap --script click-plc-info -p 502,44818 192.168.0.10 -oX results.xml
+```
+
+---
+
+## NSE Troubleshooting
+
+### Script Not Found
+
+```
+NSE: Failed to load script: click-plc-info.nse
+```
+
+**Solutions:**
+- Use full path: `--script ./click-plc-info.nse`
+- Copy script to Nmap scripts directory
+- Run `nmap --script-updatedb` after installing
+
+### No Output Displayed
+
+If the script runs but shows no output:
+- Verify PLC is reachable: `ping 192.168.0.10`
+- Check port is open: `nmap -p 502 192.168.0.10`
+- Run with debug: `nmap --script click-plc-info -p 502 192.168.0.10 -d`
+
+### Timeout Errors
+
+```
+TIMEOUT waiting for response
+```
+
+**Solutions:**
+- Increase Nmap timeout: `--host-timeout 30s`
+- Verify network path to PLC
+- Check for firewall blocking
+
+### Invalid Argument Values
+
+Arguments are validated and clamped:
+- `coil-count` and `reg-count` clamped to 1-100
+- `unit-id` clamped to 0-247
+- Invalid values logged in debug output (`-d` flag)
+
+### Modbus Exception Errors
+
+Debug output may show:
+```
+Exception 2: Illegal Data Address
+```
+
+This means the requested address doesn't exist on this PLC model. The script continues scanning other addresses.
+
+### ENIP No Response
+
+If ENIP scan shows no results:
+- Verify EtherNet/IP is enabled on PLC
+- Try UDP transport: `--script-args='click-plc-info.udp=true'`
+- Check port 44818 is not blocked

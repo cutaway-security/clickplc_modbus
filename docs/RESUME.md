@@ -6,23 +6,50 @@
 |--------|--------|---------------|
 | click_mb_scanner.py | COMPLETE | - |
 | click_enip_scanner.py | COMPLETE | - |
-| click-plc-info.nse | IN PROGRESS | Phase 1 - Script Skeleton |
+| click-plc-info.nse | COMPLETE | Phase 6 - Integration and Polish |
 
 ---
 
 ## Currently Working On
 
-### NSE Script (click-plc-info.nse)
+All scripts are complete. No active development tasks.
 
-**Phase**: 1 - Script Skeleton
-**Step**: Not started
-**Blocker**: None
+---
 
-**Next Actions**:
-1. Create click-plc-info.nse with standard headers
-2. Define portrule for ports 502 and 44818
-3. Implement script argument parsing
-4. Create action function stub
+## NSE Script Completion Summary
+
+### Phase 6 - Integration and Polish (COMPLETE)
+
+**Completed:**
+1. Added script argument validation (unit-id 0-247, coil-count 1-100, reg-count 1-100)
+2. Updated README.md with NSE script section
+3. Updated USAGE.md with comprehensive NSE documentation
+4. Final testing of all features - SUCCESS
+
+**Final Test Results (192.168.0.10)**:
+
+Port 502 (Modbus):
+- Device Information: Firmware 3.41, IP 192.168.0.10, MAC 00:D0:7C:1A:42:44
+- X Inputs (X001-X010): 0 0 0 0 0 0 0 0 0 0
+- Y Outputs (Y001-Y010): 0 1 1 1 0 0 0 0 0 0
+- DS Registers (DS1-DS10): 0, 0, 422, 0, 5, 252, 30, 0, 0, 0
+- DD Registers (DD1-DD10): 0, 0, 422400000, 117333, 0, 0, 0, 0, 0, 0
+
+Port 44818 (ENIP):
+- Vendor: Koyo Electronics (AutomationDirect) (482)
+- Device Type: Generic Device (keyable) (43)
+- Product Name: CLICK C2-03CPU-2
+- Serial Number: 0x35bf2b44
+- Revision: 1.1
+
+**Argument Tests:**
+- coil-count=20, reg-count=5: Shows correct ranges
+- modbus-only=true: Skips ENIP correctly
+- Invalid values (coil-count=200, unit-id=255): Validated and clamped
+
+**Key Notes:**
+- Firmware from Modbus (3.41) is PLC firmware
+- ENIP Revision (1.1) is ENIP protocol version, not firmware
 
 ---
 
@@ -121,6 +148,67 @@ None currently.
 ---
 
 ## Session Log
+
+### 2026-01-06 (NSE Phase 6 Complete - Integration and Polish)
+- Added script argument validation (unit-id 0-247, coil-count 1-100, reg-count 1-100)
+- Invalid values logged to debug and clamped to valid range
+- Updated README.md with NSE script section (features, quick start, arguments, example output)
+- Updated USAGE.md with comprehensive NSE documentation (installation, arguments, output, troubleshooting)
+- Final testing: dual-port scan, custom arguments, invalid arguments - all working
+- Phase 6 EXIT CRITERIA MET: Script complete and documented
+- PROJECT COMPLETE: All three scanning tools finished
+
+### 2026-01-06 (NSE Phase 5 Complete - Modbus Device Info)
+- Implemented modbus_scan() main function with device info and I/O reading
+- Read SD registers: SD5-SD6 (firmware), SD80-SD91 (network), SD188-SD193 (MAC), SD101-SD102 (EIP status)
+- Firmware format: SD5=minor (41), SD6=major (3) -> displays as "3.41"
+- Read I/O data: X inputs (FC 02), Y outputs (FC 01), DS registers (FC 03), DD registers (FC 03)
+- Fixed stdnse.output_table() iteration issue - next() doesn't work, use explicit flags
+- Reorganized code - data conversion functions must be declared before use in Lua
+- Tested dual-port scanning (502 + 44818) - both working
+- Tested script arguments (coil-count, reg-count) - working
+- Clarification: ENIP Revision (1.1) is ENIP protocol version, not PLC firmware
+- Phase 5 EXIT CRITERIA MET: Modbus scan returns device info and I/O data
+
+### 2026-01-06 (NSE Phase 4 Complete - Modbus Helpers)
+- Implemented form_modbus_request() with string.pack() for MBAP header + PDU
+- Implemented parse_modbus_response() with exception code detection and lookup
+- Created wrapper functions: read_coils(), read_discrete_inputs(), read_holding_registers(), read_input_registers()
+- Implemented data conversion: bytes_to_int16(), bytes_to_int32() with signed handling
+- Implemented formatting helpers: format_ip(), format_mac(), format_firmware()
+- Added transaction_id global counter (increments per request)
+- Tested all 4 function codes against real PLC - all working
+- Phase 4 EXIT CRITERIA MET: Modbus communication functional
+
+### 2026-01-06 (NSE Phase 3 Complete - ENIP UDP)
+- Implemented enip_scan_udp() with nmap.new_socket("udp")
+- Updated action() to check use_udp flag OR port.protocol == "udp"
+- Tested UDP with --script-args='click-plc-info.udp=true' - SUCCESS
+- Tested RUN vs STOP mode with hardware switch
+- Finding: List Identity Status (0x0030) and State (0xff) unchanged between modes
+- Additional test: CIP Get_Attribute_Single on Identity Object (0x01/1/5) also unchanged
+- Conclusion: CLICK ENIP does not expose PLC operating mode (Status refers to ENIP adapter)
+- Phase 3 EXIT CRITERIA MET: ENIP UDP scan functional, both transports working
+
+### 2026-01-05 (NSE Phase 2 Complete - ENIP TCP)
+- Implemented form_enip_list_identity() - 24-byte List Identity packet
+- Implemented parse_enip_response() - validates command (0x63), type ID (0x0C)
+- Parses: vendor, device type, product name, serial, product code, revision, status, state, IP
+- Implemented enip_scan_tcp() with nmap.new_socket(), try/catch pattern
+- Added ipOps library for IP address formatting
+- Tested against real PLC - all fields correctly parsed
+- Device identified as Koyo Electronics (482), Device Type 43
+- Phase 2 EXIT CRITERIA MET: ENIP TCP scan functional
+
+### 2026-01-05 (NSE Phase 1 Complete - Script Skeleton)
+- Created click-plc-info.nse with standard NSE headers
+- Implemented portrule for ports 502 (Modbus) and 44818 (ENIP)
+- Added 6 script arguments (modbus-only, enip-only, unit-id, coil-count, reg-count, udp)
+- Created action function stub with port-based routing
+- Added vendor_id table with both 898 and 482 for AutomationDirect
+- Added device_type and modbus_exception lookup tables
+- Script categories: discovery, version
+- Phase 1 EXIT CRITERIA MET: Script skeleton ready for protocol implementation
 
 ### 2026-01-05 (NSE Script Planning)
 - Reviewed existing NSE scripts (modbus-discover.nse, enip-info.nse)
@@ -295,6 +383,7 @@ local vendor_id = {
   [0] = "Reserved",
   [1] = "Rockwell Automation/Allen-Bradley",
   [145] = "Siemens",
+  [482] = "Koyo Electronics (AutomationDirect)",
   [898] = "AutomationDirect",
 }
 ```
