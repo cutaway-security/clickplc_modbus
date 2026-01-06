@@ -3,23 +3,32 @@
 ## Table of Contents
 
 - [Installation](#installation)
-- [Basic Usage](#basic-usage)
-- [Command-Line Options](#command-line-options)
-- [Address Types](#address-types)
-- [Output Formats](#output-formats)
-- [Using CLICK Project CSV Files](#using-click-project-csv-files)
-- [Examples](#examples)
-- [Troubleshooting](#troubleshooting)
-- [CLICK PLC Modbus Reference](#click-plc-modbus-reference)
+- [Modbus Scanner](#modbus-scanner-click_mb_scannerpy)
+  - [Basic Usage](#basic-usage)
+  - [Command-Line Options](#command-line-options)
+  - [Address Types](#address-types)
+  - [Output Formats](#output-formats)
+  - [Using CLICK Project CSV Files](#using-click-project-csv-files)
+  - [Examples](#examples)
+  - [Troubleshooting](#troubleshooting)
+  - [CLICK PLC Modbus Reference](#click-plc-modbus-reference)
+- [EtherNet/IP Scanner](#ethernetip-scanner-click_enip_scannerpy)
+  - [ENIP Basic Usage](#enip-basic-usage)
+  - [ENIP Command-Line Options](#enip-command-line-options)
+  - [ENIP Output Modes](#enip-output-modes)
+  - [ENIP Examples](#enip-examples)
+  - [ENIP Troubleshooting](#enip-troubleshooting)
+  - [CIP Protocol Reference](#cip-protocol-reference)
 
 ---
 
 ## Installation
 
-### Requirements
+### Requirements (Both Scanners)
 
 - Python 3.11 or higher
-- PyModbus 3.x
+- PyModbus 3.x (Modbus scanner)
+- pycomm3 1.x+ (EtherNet/IP scanner)
 
 ### Install Dependencies
 
@@ -30,10 +39,13 @@ pip install -r requirements.txt
 ### Verify Installation
 
 ```bash
-python click_modbus_scanner.py --help
+python click_mb_scanner.py --help
+python click_enip_scanner.py --help
 ```
 
 ---
+
+# Modbus Scanner (click_mb_scanner.py)
 
 ## Basic Usage
 
@@ -397,3 +409,243 @@ CLICK PLCs use **little-endian word order** (low word first) for 32-bit values.
 The scanner automatically chunks large requests:
 - Coils/Discrete Inputs: 100 per request (Modbus spec allows 2000)
 - Registers: 100 per request (Modbus spec allows 125)
+
+---
+
+# EtherNet/IP Scanner (click_enip_scanner.py)
+
+## ENIP Basic Usage
+
+The EtherNet/IP scanner reads device information and assembly data from CLICK PLCs using CIP Explicit Messaging over EtherNet/IP.
+
+### Read Device Identity
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --info
+```
+
+Shows vendor ID, product name, serial number, and firmware revision.
+
+### Read Network Configuration
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --network
+```
+
+Shows IP address, subnet mask, gateway, MAC address, and hostname.
+
+### Read Assembly Data (Default)
+
+```bash
+python click_enip_scanner.py 192.168.0.10
+```
+
+Reads assembly data with multi-format interpretation (INT16, INT32, FLOAT).
+
+### Full Scan
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --full
+```
+
+Combines identity, network, and assembly data in one scan.
+
+---
+
+## ENIP Command-Line Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `<host>` | PLC IP address or hostname | Required |
+| `--port PORT` | EtherNet/IP port | 44818 |
+| `--timeout SEC` | Connection timeout in seconds | 5 |
+| `--info` | Display device identity only | - |
+| `--network` | Display network information only | - |
+| `--full` | Display all information | - |
+| `--connection {1,2}` | Assembly connection number | 1 |
+| `--size SIZE` | Maximum assembly bytes to read | 500 |
+| `--hex` | Display hex dump only (no multi-format) | - |
+| `--output FILE` | Write Markdown report (.md extension) | Console |
+
+Note: `--info`, `--network`, and `--full` are mutually exclusive.
+
+---
+
+## ENIP Output Modes
+
+### Console Output (Default)
+
+Default output shows formatted tables:
+
+```
+CLICK PLC Identity Information
+========================================
+Vendor ID:      482 (AutomationDirect)
+Device Type:    43 (Generic Device (CLICK))
+Product Code:   634
+Revision:       1.1
+Status:         0x0030
+Serial Number:  0x35BF2B44 (901720900)
+Product Name:   CLICK C2-03CPU-2
+```
+
+### Multi-Format Assembly Display
+
+Assembly data is shown in multiple interpretations:
+- **Hex Dump**: Raw bytes with ASCII representation
+- **INT16**: Signed 16-bit integers (DS registers)
+- **INT32**: Signed 32-bit integers (DD registers)
+- **FLOAT**: IEEE 754 single precision (DF registers)
+
+### Markdown Output
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --full --output report.md
+```
+
+Generates a formatted Markdown report including:
+- Scan metadata (target, date, scanner version)
+- Device identity table
+- Network configuration table
+- Assembly data with all format interpretations
+
+---
+
+## ENIP Examples
+
+### Quick Connection Test
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --info
+```
+
+### Full System Scan with Report
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --full --output scan_report.md
+```
+
+### Read Connection 2 Assembly
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --connection 2
+```
+
+### Hex-Only Output
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --hex
+```
+
+### Extended Timeout for Slow Networks
+
+```bash
+python click_enip_scanner.py 192.168.0.10 --timeout 15 --full
+```
+
+---
+
+## ENIP Troubleshooting
+
+### Connection Timeout
+
+```
+Connection timeout to 192.168.0.10:44818
+```
+
+**Solutions:**
+- Verify network connectivity: `ping 192.168.0.10`
+- Check that EtherNet/IP is enabled on the PLC
+- Verify port 44818 is not blocked by firewall
+- Try increasing timeout: `--timeout 15`
+
+### Connection Refused
+
+```
+Connection refused by 192.168.0.10:44818
+```
+
+**Solutions:**
+- Verify the PLC is powered on
+- Check that EtherNet/IP adapter is enabled in CLICK software
+- Verify no firewall is blocking port 44818
+
+### Object Does Not Exist
+
+```
+Object Does Not Exist: The specified CIP object does not exist in the device
+```
+
+**Solutions:**
+- The assembly connection may not be configured
+- Check EtherNet/IP Adapter Setup in CLICK Programming Software
+- Verify the correct connection number (1 or 2)
+
+### Service Not Supported
+
+```
+Service Not Supported: Requested service not implemented for this object
+```
+
+**Solutions:**
+- This error is rare with the scanner (uses Get Attribute Single)
+- Ensure you are connecting to a CLICK PLC, not another device type
+
+### Size Mismatch Warning
+
+```
+Note: Size mismatch: requested 500 bytes, received 432 bytes
+```
+
+This is informational, not an error. The scanner requested up to 500 bytes but the PLC returned its actual configured size (432 bytes). The scan completed successfully.
+
+---
+
+## CIP Protocol Reference
+
+### CIP Object Classes Used
+
+| Class | Name | Purpose |
+|-------|------|---------|
+| 0x01 | Identity Object | Device identification |
+| 0x04 | Assembly Object | Configured I/O data |
+| 0xF5 | TCP/IP Interface Object | IP configuration |
+| 0xF6 | Ethernet Link Object | MAC and link status |
+
+### Assembly Instance Mapping
+
+| Connection | Input Instance | Output Instance |
+|------------|----------------|-----------------|
+| 1 | 101 | 102 |
+| 2 | 103 | 104 |
+
+### CIP Service Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| 0x0E | Get Attribute Single | Read single attribute value |
+| 0x01 | Get Attributes All | Read all attributes (not used) |
+
+### Common CIP Error Codes
+
+| Code | Name | Description |
+|------|------|-------------|
+| 0x00 | Success | Operation completed |
+| 0x05 | Path Destination Error | Invalid class/instance/attribute |
+| 0x08 | Service Not Supported | Service not implemented |
+| 0x16 | Object Does Not Exist | Assembly not configured |
+
+### CLICK EtherNet/IP Limitations
+
+- Maximum 2 concurrent connections
+- Acts as Adapter only (does not initiate connections)
+- Does NOT support Tag-Based (Symbolic) messaging
+- Does NOT support PCCC
+- Minimum RPI: 10ms
+
+### Data Byte Order
+
+All CIP data uses little-endian byte order:
+- 16-bit values: Low byte first
+- 32-bit values: Low word first
+- IP addresses: Reversed (e.g., 192.168.0.10 stored as 10.0.168.192)

@@ -310,7 +310,277 @@ All 2-word (32-bit) types: DD, DF, DH, CTD, XD, YD, TXT
 
 ---
 
+## Session: 2026-01-05 (EtherNet/IP Scanner - Planning)
+
+### Context
+Starting development of click_enip_scanner.py to read CLICK PLC data via EtherNet/IP CIP Explicit Messaging.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Use pycomm3 instead of CPPPO | CPPPO read() fails with "Service not supported" on CLICK |
+| CIP-only (no Modbus) | Keep scanner focused on single protocol |
+| Multi-format data display | Assembly data configuration unknown at scan time |
+| No CSV output for ENIP | Assembly data format not suitable for tabular CSV |
+| Support connections 1 and 2 | CLICK supports 2 EtherNet/IP adapter connections |
+
+### CLICK EtherNet/IP Limitations Discovered
+- Maximum 2 concurrent connections
+- Acts as Adapter only (responds, does not initiate)
+- Does NOT support Tag-Based (Symbolic) messaging
+- Does NOT support PCCC
+- Minimum RPI: 10ms
+
+### CIP Addressing for CLICK
+```
+Identity Object:     Class 0x01, Instance 1
+Assembly Object:     Class 0x04, Instance 101/102 (Conn 1) or 103/104 (Conn 2)
+TCP/IP Interface:    Class 0xF5, Instance 1
+Ethernet Link:       Class 0xF6, Instance 1
+```
+
+---
+
+## Session: 2026-01-05 (EtherNet/IP Scanner - Phase 1 Foundation)
+
+### Context
+Testing EtherNet/IP libraries and establishing basic connectivity to CLICK PLC.
+
+### Library Evaluation
+
+**CPPPO 5.2.5:**
+- `list_identity()`: SUCCESS - Returns device info
+- `read()` with `attribute_operations()`: FAIL - "Service not supported" (Status 0x08)
+- Tested with `-S` flag for simple devices: Still fails
+- Conclusion: CPPPO uses Read Tag service instead of Get Attribute Single
+
+**pycomm3:**
+- `CIPDriver.generic_message()`: SUCCESS for all operations
+- Get Attribute Single (service 0x0E) works correctly
+- No special flags needed for CLICK
+- Clean context manager pattern
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Use pycomm3 CIPDriver | generic_message() works for all CIP objects |
+| Service 0x0E (Get Attribute Single) | Standard CIP service that CLICK supports |
+| Default port 44818 | Standard EtherNet/IP port |
+| Default timeout 5 seconds | Consistent with Modbus scanner |
+
+### Test Results Against Real PLC (192.168.0.10:44818)
+
+| CIP Object | Result |
+|------------|--------|
+| Identity (0x01) attributes 1-7 | SUCCESS |
+| TCP/IP Interface (0xF5) attribute 5 | SUCCESS |
+| Ethernet Link (0xF6) attributes 1-3 | SUCCESS |
+| Assembly (0x04) Instance 101 | SUCCESS - 432 bytes |
+| Assembly (0x04) Instance 103 | "Object does not exist" (not configured) |
+
+### Technical Notes
+- IP addresses in TCP/IP Interface use little-endian byte order
+- Assembly returns actual configured size, not requested size
+- Unconfigured connections return graceful error message
+
+---
+
+## Session: 2026-01-05 (EtherNet/IP Scanner - Phase 2-3 Device Info and Data)
+
+### Context
+Implementing device identity, network info, and assembly data retrieval with multi-format interpretation.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Multi-format display (INT16/INT32/FLOAT/HEX) | Configuration unknown at scan time |
+| Show all interpretations | User can identify correct format from data patterns |
+| Size mismatch as warning, not error | Expected behavior when --size differs from actual |
+| --hex flag for legacy output | Some users prefer hex-only dump |
+
+### Data Interpretation Functions
+```python
+interpret_as_int16()   # DS registers
+interpret_as_uint16()  # Unsigned variant
+interpret_as_int32()   # DD registers
+interpret_as_float()   # DF registers (IEEE 754)
+interpret_as_ascii()   # Text data
+```
+
+### Test Results
+- Identity Object: All 7 attributes readable
+- Network Info: IP, subnet, gateway, hostname, MAC, link speed
+- Assembly Data: 432 bytes from Connection 1 (DS1-DS72 + DD3-DD74)
+- Multi-format display: Correct alignment and formatting
+
+### Lessons Learned
+1. Always display size mismatch as informational, not error
+2. Include data summary (total INT16/INT32/FLOAT values)
+3. Note that DS registers are INT16, DD registers are INT32/FLOAT
+
+---
+
+## Session: 2026-01-05 (EtherNet/IP Scanner - Phase 4 Scope Change)
+
+### Context
+Original Phase 4 planned hybrid ENIP+Modbus --sysconfig feature. User clarified ENIP scanner should be CIP-only.
+
+### Scope Change
+
+**Removed:**
+- --sysconfig option (required Modbus for SD/SC registers)
+- pymodbus dependency for ENIP scanner
+- Hybrid protocol mixing
+
+**Added:**
+- --full option (combines --info + --network + assembly data)
+
+### Rationale
+- ENIP scanner should use EtherNet/IP CIP protocol only
+- SD/SC register data (EIP status) only accessible via Modbus
+- Network/device info already available via CIP objects
+- Keep each scanner focused on single protocol
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Remove Phase 4 (System Config) | Hybrid ENIP+Modbus out of scope |
+| Add --full option | Comprehensive view via CIP only |
+| Mutually exclusive --info/--network/--full | Cleaner CLI, prevents confusion |
+| Renumber phases 5->4, 6->5 | Maintain sequential numbering |
+
+---
+
+## Session: 2026-01-05 (EtherNet/IP Scanner - Phase 4 Output and CLI)
+
+### Context
+Implementing Markdown output and CLI polish for ENIP scanner.
+
+### Markdown Report Structure
+```
+# CLICK PLC EtherNet/IP Scan Report
+| Parameter | Value |
+| Target | host:port |
+| Date | timestamp |
+| Scanner | version |
+
+## Device Identity (table)
+## Network Information (table)
+## Assembly Data - Connection N
+### Hex Dump (code block)
+### INT16 Interpretation (code block)
+### INT32 Interpretation (code block)
+### FLOAT Interpretation (code block)
+### Data Summary
+```
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| .md extension required | Explicit format selection, avoid accidents |
+| Scanner version in report | Traceability for support |
+| All formats in Markdown | Same comprehensive view as console |
+| argparse mutually exclusive group | Enforced at CLI level |
+
+### Test Results
+- --full --output report.md: SUCCESS
+- Mutually exclusive group: Enforced correctly
+- Extension validation: Rejects non-.md files
+
+---
+
+## Session: 2026-01-05 (EtherNet/IP Scanner - Phase 5 Polish)
+
+### Context
+Implementing error handling, documentation, and final testing.
+
+### CIP Error Code Implementation
+
+**General Status Codes (14 codes):**
+```python
+CIP_GENERAL_STATUS = {
+    0x00: ("Success", "Operation completed successfully"),
+    0x05: ("Path Destination Error", "Object Class, Instance, or Attribute not supported"),
+    0x08: ("Service Not Supported", "Requested service not implemented"),
+    0x16: ("Object Does Not Exist", "Specified object does not exist"),
+    # ... etc
+}
+```
+
+**Extended Status Codes (19 codes for status 0x01):**
+```python
+CIP_EXTENDED_STATUS_0x01 = {
+    0x0100: ("Connection In Use", "Connection already established"),
+    0x0106: ("Owner Conflict", "Exclusive owner already configured"),
+    # ... etc
+}
+```
+
+**Troubleshooting Hints:**
+```python
+CIP_TROUBLESHOOTING = {
+    0x16: "The assembly instance may not be configured. Check EtherNet/IP setup in CLICK software.",
+}
+```
+
+### Error Handler Functions
+- `parse_cip_error()` - Parse error string, return (name, description, hint)
+- `format_cip_error()` - Format for user display
+- `handle_connection_error()` - Connection-specific messages with troubleshooting
+
+### Documentation Updates
+- README.md: Added ENIP scanner section with both scripts
+- USAGE.md: Added comprehensive ENIP documentation
+  - Basic usage and quick start
+  - CLI options reference
+  - Output modes
+  - Examples
+  - Troubleshooting section
+  - CIP Protocol Reference
+
+### Final Test Results
+
+| Test | Result |
+|------|--------|
+| --info | SUCCESS |
+| --network | SUCCESS |
+| --hex | SUCCESS |
+| --full | SUCCESS |
+| --connection 2 (unconfigured) | "Object Does Not Exist" with hint |
+| Non-existent host | Helpful troubleshooting message |
+| Invalid port | Validation error |
+
+### Lessons Learned
+1. User-friendly error messages significantly improve usability
+2. Include troubleshooting hints inline with errors
+3. Document CIP error codes from vendor documentation
+
+---
+
 ## Failed Approaches
+
+### CPPPO for CLICK PLCs (2026-01-05)
+**What:** Initial plan to use CPPPO library for EtherNet/IP CIP communication.
+
+**Why it failed:** CPPPO's `read()` function returns "Service not supported" (Status 0x08) for CLICK PLCs. CPPPO appears to use Read Tag service instead of Get Attribute Single, which CLICK does not support.
+
+**Symptom:** `list_identity()` works, but all attribute reads fail with status 0x08.
+
+**Resolution:** Switched to pycomm3 CIPDriver with `generic_message()` using service 0x0E (Get Attribute Single).
+
+### Hybrid ENIP+Modbus --sysconfig (2026-01-05)
+**What:** Planned feature to read EIP status from SD/SC Modbus registers while using ENIP.
+
+**Why it failed:** User clarified that ENIP scanner should use EtherNet/IP CIP only, no Modbus.
+
+**Symptom:** Scope creep - mixing protocols defeats purpose of separate scanners.
+
+**Resolution:** Removed --sysconfig, added --full option for comprehensive CIP-only view.
 
 ### Big-Endian Word Order Assumption (Fixed 2026-01-05)
 **What:** Initial implementation assumed CLICK PLC used big-endian word order (high word first) for 32-bit values based on common Modbus convention.
@@ -325,7 +595,30 @@ All 2-word (32-bit) types: DD, DF, DH, CTD, XD, YD, TXT
 
 ## Successful Techniques
 
-(Document successful patterns here as project progresses)
+### pycomm3 generic_message() for CIP
+Using `CIPDriver.generic_message()` with explicit service code provides maximum control:
+```python
+result = plc.generic_message(
+    service=0x0E,           # Get Attribute Single
+    class_code=0x04,        # Assembly Object
+    instance=101,           # Connection 1 Input
+    attribute=0x03,         # Data attribute
+)
+```
+This works reliably for CLICK PLCs where higher-level APIs fail.
+
+### Multi-Format Data Display
+When assembly configuration is unknown, showing all interpretations (INT16, INT32, FLOAT, HEX) lets users identify correct format from data patterns. Values that make sense (e.g., 3,300,000 vs 1.5e9) indicate correct interpretation.
+
+### Inline Troubleshooting Hints
+Including hints with error messages reduces support burden:
+```
+Object Does Not Exist: The specified CIP object does not exist in the device
+  Hint: The assembly instance may not be configured. Check EtherNet/IP setup in CLICK software.
+```
+
+### Mutually Exclusive argparse Groups
+Using `add_mutually_exclusive_group()` enforces option conflicts at CLI level, preventing invalid combinations before code runs.
 
 ---
 
@@ -336,41 +629,71 @@ All 2-word (32-bit) types: DD, DF, DH, CTD, XD, YD, TXT
 
 ### Test Connection
 ```bash
-# Quick test with nc (netcat)
-nc -zv 192.168.1.10 502
+# Quick test with nc (netcat) - Modbus
+nc -zv 192.168.0.10 502
+
+# Quick test with nc (netcat) - EtherNet/IP
+nc -zv 192.168.0.10 44818
 ```
 
-### Run Scanner
+### Run Modbus Scanner
 ```bash
 # Basic usage - scan common types (X0, Y0, C, DS, DD, DF)
-python click_modbus_scanner.py 192.168.0.10
+python click_mb_scanner.py 192.168.0.10
 
 # Specific types
-python click_modbus_scanner.py 192.168.0.10 --type DS,DF
+python click_mb_scanner.py 192.168.0.10 --type DS,DF
 
 # Full scan - all 32 address types
-python click_modbus_scanner.py 192.168.0.10 --full
+python click_mb_scanner.py 192.168.0.10 --full
 
 # Use CLICK CSV config file (filters addresses, adds nicknames)
-python click_modbus_scanner.py 192.168.0.10 --config project_export.csv
+python click_mb_scanner.py 192.168.0.10 --config project_export.csv
 
 # Output to CSV file
-python click_modbus_scanner.py 192.168.0.10 --type X0 --output scan_results.csv
+python click_mb_scanner.py 192.168.0.10 --type X0 --output scan_results.csv
 
 # Output to Markdown file
-python click_modbus_scanner.py 192.168.0.10 --type X0,DS --output scan_results.md
+python click_mb_scanner.py 192.168.0.10 --type X0,DS --output scan_results.md
 
 # Show 984 format addresses
-python click_modbus_scanner.py 192.168.0.10 --type DS --format 984
+python click_mb_scanner.py 192.168.0.10 --type DS --format 984
 
 # List available address types
-python click_modbus_scanner.py 192.168.0.10 --list
+python click_mb_scanner.py 192.168.0.10 --list
 
 # Slow rate for sensitive environments
-python click_modbus_scanner.py 192.168.0.10 --rate slow
+python click_mb_scanner.py 192.168.0.10 --rate slow
 
 # Combine config with output file
-python click_modbus_scanner.py 192.168.0.10 --config project.csv --output results.md
+python click_mb_scanner.py 192.168.0.10 --config project.csv --output results.md
+```
+
+### Run EtherNet/IP Scanner
+```bash
+# Read device identity
+python click_enip_scanner.py 192.168.0.10 --info
+
+# Read network configuration
+python click_enip_scanner.py 192.168.0.10 --network
+
+# Read assembly data (default - includes identity header)
+python click_enip_scanner.py 192.168.0.10
+
+# Full scan with all information
+python click_enip_scanner.py 192.168.0.10 --full
+
+# Hex-only output (no multi-format interpretation)
+python click_enip_scanner.py 192.168.0.10 --hex
+
+# Read Connection 2 assembly (if configured)
+python click_enip_scanner.py 192.168.0.10 --connection 2
+
+# Save to Markdown report
+python click_enip_scanner.py 192.168.0.10 --full --output report.md
+
+# Extended timeout for slow networks
+python click_enip_scanner.py 192.168.0.10 --timeout 15 --full
 ```
 
 ---
@@ -379,10 +702,19 @@ python click_modbus_scanner.py 192.168.0.10 --config project.csv --output result
 
 Items that may be useful but are currently out of scope:
 
+### Modbus Scanner
 1. **Write Operations**: Could add with --write flag and confirmation
 2. **RTU Support**: Serial connection for non-Ethernet PLCs
 3. **Discovery Mode**: Scan subnet for Modbus devices
 4. **Comparison Mode**: Diff current state vs expected values
 5. **Watch Mode**: Continuous monitoring of specific addresses
+
+### EtherNet/IP Scanner
+1. **CSV Output**: Tabular format for assembly data (challenge: multi-format)
+2. **--quiet Mode**: Suppress output for scripted usage
+3. **--version Flag**: Display scanner version and exit
+4. **Custom CIP Queries**: Specify class/instance/attribute from CLI
+5. **List Identity**: Discover EtherNet/IP devices on network
+6. **Output Instance Support**: Read output assembly (102/104) for write verification
 
 Document here if scope changes in future versions.

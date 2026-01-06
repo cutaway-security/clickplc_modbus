@@ -5,4 +5,8 @@
 pymodbus>=3.6.0,<4.0.0
 
 # EtherNet/IP CIP support (click_enip_scanner.py)
-cpppo>=5.0.0
+# pycomm3 is primary - CIPDriver.generic_message() works for CLICK PLCs
+pycomm3>=1.0.0
+
+# cpppo is optional - list_identity() works but read() fails on CLICK
+# cpppo>=5.0.0

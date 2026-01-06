@@ -57,11 +57,13 @@ Before starting any development session, read these documents in order:
 | Constraint | Value |
 |------------|-------|
 | Python Version | 3.11+ |
-| CPPPO Version | 5.x |
+| pycomm3 Version | 1.x+ |
 | Protocol | EtherNet/IP CIP Explicit Messaging |
 | Port | 44818 (default) |
-| Operations | Read-only (Get Attribute Single) |
-| Device Type | Simple CIP device (proxy_simple) |
+| Operations | Read-only (Get Attribute Single 0x0E) |
+| API | CIPDriver.generic_message() |
+
+**Note**: pycomm3 replaced CPPPO due to compatibility issues with CLICK PLCs.
 
 ---
 
@@ -111,13 +113,13 @@ When making changes, update the appropriate documents:
 - HEX and 984 address format support
 
 ### EtherNet/IP Scanner - In Scope
-- EtherNet/IP CIP Explicit Messaging to CLICK PLCs
-- Read Identity Object (device info)
-- Read TCP/IP Interface and Ethernet Link Objects (network info)
+- EtherNet/IP CIP Explicit Messaging to CLICK PLCs (CIP only, no Modbus)
+- Read Identity Object (device info via --info)
+- Read TCP/IP Interface and Ethernet Link Objects (network info via --network)
 - Read Assembly Objects (configured data blocks)
 - Multi-format data interpretation (INT16, INT32, FLOAT, HEX, ASCII)
+- Comprehensive view combining all info (--full)
 - Console and Markdown output
-- System configuration via hybrid ENIP + Modbus (--sysconfig)
 
 ### Out of Scope (Both Scanners)
 - Write operations

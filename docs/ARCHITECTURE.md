@@ -408,65 +408,6 @@ Offset    Hex (16 bytes)                            INT16[0-7]           INT32[0
 
 ---
 
-## System Configuration (--sysconfig)
-
-The --sysconfig option retrieves system status via Modbus TCP (port 502) in addition to ENIP device/network info.
-
-### Network Information (Modbus FC 04 - Input Registers)
-
-| Address | Modbus Hex | Nickname | Description |
-|---------|------------|----------|-------------|
-| SD80 | 0xF04F | _Port1_IP_Address1 | IP octet 1 |
-| SD81 | 0xF050 | _Port1_IP_Address2 | IP octet 2 |
-| SD82 | 0xF051 | _Port1_IP_Address3 | IP octet 3 |
-| SD83 | 0xF052 | _Port1_IP_Address4 | IP octet 4 |
-| SD84 | 0xF053 | _Port1_Subnet_Mask1 | Subnet octet 1 |
-| SD85 | 0xF054 | _Port1_Subnet_Mask2 | Subnet octet 2 |
-| SD86 | 0xF055 | _Port1_Subnet_Mask3 | Subnet octet 3 |
-| SD87 | 0xF056 | _Port1_Subnet_Mask4 | Subnet octet 4 |
-| SD88 | 0xF057 | _Port1_Default_Gateway1 | Gateway octet 1 |
-| SD89 | 0xF058 | _Port1_Default_Gateway2 | Gateway octet 2 |
-| SD90 | 0xF059 | _Port1_Default_Gateway3 | Gateway octet 3 |
-| SD91 | 0xF05A | _Port1_Default_Gateway4 | Gateway octet 4 |
-| SD188 | 0xF0BB | _Port1_MAC_Address1 | MAC octet 1 |
-| SD189 | 0xF0BC | _Port1_MAC_Address2 | MAC octet 2 |
-| SD190 | 0xF0BD | _Port1_MAC_Address3 | MAC octet 3 |
-| SD191 | 0xF0BE | _Port1_MAC_Address4 | MAC octet 4 |
-| SD192 | 0xF0BF | _Port1_MAC_Address5 | MAC octet 5 |
-| SD193 | 0xF0C0 | _Port1_MAC_Address6 | MAC octet 6 |
-
-### EtherNet/IP Status Coils (Modbus FC 02 - Discrete Inputs)
-
-| Address | Modbus Hex | Nickname | Description |
-|---------|------------|----------|-------------|
-| SC111 | 0xF06E | _EIP_Con1_ConOnline | Connection 1 Online |
-| SC112 | 0xF06F | _EIP_Con1_Error | Connection 1 Error |
-| SC113 | 0xF070 | _EIP_Con1_Originator_Run | Connection 1 Originator Running |
-| SC114 | 0xF071 | _EIP_Con2_ConOnline | Connection 2 Online |
-| SC115 | 0xF072 | _EIP_Con2_Error | Connection 2 Error |
-| SC116 | 0xF073 | _EIP_Con2_Originator_Run | Connection 2 Originator Running |
-
-### EtherNet/IP Status Registers (Modbus FC 03/04)
-
-| Address | Modbus Hex | FC | Nickname | Description |
-|---------|------------|-------|----------|-------------|
-| SD101 | 0xF064 | 04 | _EIP_ModuleStatus | Module Status |
-| SD102 | 0xF065 | 04 | _EIP_IdentityStatus | Identity Status |
-| SD103 | 0xF066 | 04 | _EIP_Con1_NodeStatus | Connection 1 Node Status |
-| SD104 | 0xF067 | 04 | _EIP_Con1_GeneralStatus | Connection 1 General Status |
-| SD105 | 0xF068 | 04 | _EIP_Con1_ExtendedStatus | Connection 1 Extended Status |
-| SD106 | 0xF069 | 03 | _EIP_Con1_LostCount | Connection 1 Lost Count |
-| SD107 | 0xF06A | 03 | _EIP_Con1_DisConCount | Connection 1 Disconnect Count |
-| SD108 | 0xF06B | 03 | _EIP_Con1_No_Comm_Time | Connection 1 No Comm Time |
-| SD109 | 0xF06C | 04 | _EIP_Con2_NodeStatus | Connection 2 Node Status |
-| SD110 | 0xF06D | 04 | _EIP_Con2_GeneralStatus | Connection 2 General Status |
-| SD111 | 0xF06E | 04 | _EIP_Con2_ExtendedStatus | Connection 2 Extended Status |
-| SD112 | 0xF06F | 03 | _EIP_Con2_LostCount | Connection 2 Lost Count |
-| SD113 | 0xF070 | 03 | _EIP_Con2_DisConCount | Connection 2 Disconnect Count |
-| SD114 | 0xF071 | 03 | _EIP_Con2_No_Comm_Time | Connection 2 No Comm Time |
-
----
-
 ## Script Organization
 
 ```
@@ -474,32 +415,23 @@ click_enip_scanner.py
     |
     +-- Section: Imports and Dependency Check
     |       - Standard library imports
-    |       - CPPPO import with graceful failure
-    |       - PyModbus import (optional, for --sysconfig)
+    |       - pycomm3 import with graceful failure
     |
     +-- Section: Constants
     |       - CIP object definitions (classes, instances, attributes)
     |       - Assembly instance mappings
-    |       - Modbus addresses for --sysconfig
     |       - Default configuration values
     |
     +-- Section: Data Structures
     |       - DeviceIdentity dataclass
     |       - NetworkInfo dataclass
     |       - AssemblyData dataclass
-    |       - SystemConfig dataclass
     |
     +-- Section: CIP Communication
     |       - connect_enip() - Establish EtherNet/IP session
     |       - get_identity() - Read Identity Object (--info)
     |       - get_network_info() - Read TCP/IP and Ethernet Link (--network)
     |       - get_assembly_data() - Read Assembly Object (default)
-    |
-    +-- Section: Modbus Communication (--sysconfig only)
-    |       - connect_modbus() - Establish Modbus connection
-    |       - read_network_registers() - SD80-SD91, SD188-SD193
-    |       - read_eip_status_coils() - SC111-SC116
-    |       - read_eip_status_registers() - SD101-SD114
     |
     +-- Section: Data Interpretation
     |       - interpret_as_int16() - Little-endian signed 16-bit
@@ -511,11 +443,10 @@ click_enip_scanner.py
     |       - multi_format_display() - Combined interpretation view
     |
     +-- Section: Output Formatting
-    |       - format_console_identity() - Device info display
-    |       - format_console_network() - Network info display
-    |       - format_console_assembly() - Multi-format data display
-    |       - format_console_sysconfig() - System config display
-    |       - format_markdown() - Markdown report
+    |       - print_identity() - Device info display
+    |       - print_network_info() - Network info display
+    |       - print_assembly_multiformat() - Multi-format data display
+    |       - format_markdown() - Markdown report (planned)
     |
     +-- Section: CLI
     |       - build_argument_parser() - argparse setup
@@ -533,25 +464,24 @@ click_enip_scanner.py
 |--------|-------------|---------|
 | `<host>` | PLC IP address or hostname | Required |
 | `--port` | EtherNet/IP port | 44818 |
-| `--modbus-port` | Modbus port (for --sysconfig) | 502 |
 | `--timeout` | Connection timeout in seconds | 5 |
 | `--info` | Display device identity information | Off |
 | `--network` | Display network information | Off |
 | `--full` | Display all: info + network + data | Off |
-| `--sysconfig` | Display system config via ENIP + Modbus | Off |
 | `--size` | Bytes to read from assembly | 500 |
 | `--connection` | Connection number (1 or 2) | 1 |
+| `--hex` | Display hex dump only (no multi-format) | Off |
 | `--output` | Output file (.md only) | Console |
 
 ### Option Behavior
 
 | Mode | Action |
 |------|--------|
-| (default) | Read Assembly data, multi-format display |
+| (default) | Read Assembly data with identity header, multi-format display |
 | --info | Read Identity Object only |
-| --network | Read TCP/IP Interface and Ethernet Link Objects |
-| --full | --info + --network + assembly data |
-| --sysconfig | --info + --network + Modbus system registers |
+| --network | Read TCP/IP Interface and Ethernet Link Objects only |
+| --full | --info + --network + assembly data (comprehensive view) |
+| --hex | Use with default/--full for hex-only assembly output |
 
 ---
 
@@ -569,12 +499,7 @@ click_enip_scanner.py
 
 ### Assembly Size Mismatch
 - Handle case where requested size exceeds configured size
-- Report actual bytes returned
-- Continue with available data
-
-### Modbus Errors (--sysconfig)
-- Make Modbus optional - graceful failure if port blocked
-- Report which data sources succeeded/failed
+- Report actual bytes returned with warning message
 - Continue with available data
 
 ---
@@ -658,37 +583,50 @@ Connection 1 Input (Instance 101) - 432 bytes
 
 ---
 
-## CPPPO Usage Notes
+## pycomm3 Usage Notes
 
-### Simple Device Access
+### Primary Library for CLICK PLCs
 
-CLICK PLCs are "simple" CIP devices that do not support routing. Use `proxy_simple`:
+pycomm3 CIPDriver.generic_message() works reliably with CLICK PLCs:
 
 ```python
-from cpppo.server.enip.get_attribute import proxy_simple
+from pycomm3 import CIPDriver
 
 # Connect to CLICK PLC
-via = proxy_simple(host="192.168.0.10", port=44818)
+with CIPDriver("192.168.0.10") as plc:
+    # Read Identity Vendor ID (Class 1, Instance 1, Attribute 1)
+    result = plc.generic_message(
+        service=0x0E,       # Get Attribute Single
+        class_code=0x01,    # Identity Object
+        instance=0x01,
+        attribute=0x01,     # Vendor ID
+    )
+    if not result.error:
+        vendor_id = struct.unpack('<H', result.value)[0]
 
-# Read Identity
-identity = via.read([proxy_simple.attribute_operations(['@1/1/1'])])
-
-# Read Assembly Instance 101, Attribute 3
-assembly = via.read([proxy_simple.attribute_operations(['@4/101/3'])])
+    # Read Assembly Instance 101, Attribute 3
+    result = plc.generic_message(
+        service=0x0E,
+        class_code=0x04,    # Assembly Object
+        instance=101,
+        attribute=0x03,     # Data attribute
+    )
+    if not result.error:
+        raw_bytes = result.value  # Returns bytes object
 ```
 
-### Path Syntax
+### CPPPO Notes (Not Recommended)
 
-CPPPO uses `@class/instance/attribute` format:
-- `@1/1/1` - Identity Object, Instance 1, Attribute 1 (Vendor ID)
-- `@4/101/3` - Assembly Object, Instance 101, Attribute 3 (Data)
-- `@0xF5/1/5` - TCP/IP Interface, Instance 1, Attribute 5 (Config)
+CPPPO was originally planned but has compatibility issues with CLICK PLCs:
+- `list_identity()` works for device discovery
+- `proxy_simple.read()` fails with "Service not supported" (Status 0x08)
+- CPPPO appears to use Read Tag service instead of Get Attribute Single
 
-### Known Issues to Test
+### Data Byte Order
 
-1. May need `-S` flag for simple device mode in CLI tools
-2. Assembly data size must match configured size or may error
-3. Some CIP attributes may require specific data type hints
+- All multi-byte values use little-endian byte order
+- IP addresses in TCP/IP Interface Object: stored as UDINT in little-endian
+- Parse with `struct.unpack('<H', data)` for UINT, `struct.unpack('<I', data)` for UDINT
 
 ---
 
@@ -697,5 +635,6 @@ CPPPO uses `@class/instance/attribute` format:
 | Dependency | Version | Purpose | Required |
 |------------|---------|---------|----------|
 | Python | 3.11+ | Runtime | Yes |
-| cpppo | 5.x | EtherNet/IP CIP | Yes |
-| pymodbus | 3.x | Modbus for --sysconfig | Optional |
+| pycomm3 | 1.x+ | EtherNet/IP CIP | Yes |
+
+**Note**: This scanner uses EtherNet/IP CIP only - no Modbus dependency.
