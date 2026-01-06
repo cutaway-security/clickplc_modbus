@@ -3,7 +3,7 @@
 ## Table of Contents
 
 - [Installation](#installation)
-- [Modbus Scanner](#modbus-scanner-click_mb_scannerpy)
+- [Modbus Scanner](#modbus-scanner-click_modbus_scannerpy)
   - [Basic Usage](#basic-usage)
   - [Command-Line Options](#command-line-options)
   - [Address Types](#address-types)
@@ -45,13 +45,13 @@ pip install -r requirements.txt
 ### Verify Installation
 
 ```bash
-python click_mb_scanner.py --help
+python click_modbus_scanner.py --help
 python click_enip_scanner.py --help
 ```
 
 ---
 
-# Modbus Scanner (click_mb_scanner.py)
+# Modbus Scanner (click_modbus_scanner.py)
 
 ## Basic Usage
 

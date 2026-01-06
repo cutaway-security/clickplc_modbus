@@ -4,13 +4,13 @@
 
 This project contains three scripts for scanning AutomationDirect CLICK PLCs:
 
-1. **click_mb_scanner.py** - Modbus TCP scanner (COMPLETE)
+1. **click_modbus_scanner.py** - Modbus TCP scanner (COMPLETE)
 2. **click_enip_scanner.py** - EtherNet/IP CIP scanner (COMPLETE)
 3. **click-plc-info.nse** - Nmap NSE combined scanner (IN DEVELOPMENT)
 
 ---
 
-# Part 1: Modbus Scanner (click_mb_scanner.py)
+# Part 1: Modbus Scanner (click_modbus_scanner.py)
 
 ## Overview
 
@@ -21,7 +21,7 @@ Single Python script that communicates with AutomationDirect CLICK PLCs via Modb
 ## Script Organization
 
 ```
-click_mb_scanner.py
+click_modbus_scanner.py
     |
     +-- Section: Imports and Dependency Check
     |       - Standard library imports

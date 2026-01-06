@@ -6,6 +6,73 @@ Track development lessons, failed approaches, and successful techniques across s
 
 ---
 
+## Session: 2026-01-06 (Project Rename)
+
+### Context
+Project renamed from `clickplc_modbus` to `click-plc-scanner` to better reflect the expanded scope (Modbus + EtherNet/IP + NSE script).
+
+### Changes Made
+
+**Repository:**
+- Old: `https://github.com/cutaway-security/clickplc_modbus`
+- New: `https://github.com/cutaway-security/click-plc-scanner`
+
+**Script Naming Standardization:**
+- Documentation updated to reference `click_modbus_scanner.py` (actual filename)
+- Previous documentation incorrectly referenced `click_mb_scanner.py`
+
+**Files Updated (11 files, 26 edits):**
+
+Phase 1 - Claude Development Files:
+- claude.md - Repository URL, file structure, script references
+- docs/PLAN.md - Script table, status updates
+- docs/RESUME.md - Status table, section headers, session log
+- docs/ARCHITECTURE.md - Overview list, section headers, script organization
+- docs/GIT_RELEASE_STEPS.md - Example paths and URLs (16 occurrences)
+- docs/VIBE_HISTORY.md - Added rename session entry
+
+Phase 2 - User Documentation:
+- README.md - Script references (7 occurrences)
+- USAGE.md - Script references and anchor link fix
+
+Phase 3 - Configuration/Code Files:
+- requirements.txt - Comment reference
+- click_modbus_scanner.py - Repository URL in header
+- click_enip_scanner.py - Repository URL in header
+
+**Note:** Historical references in VIBE_HISTORY.md intentionally preserved to maintain accurate development history.
+
+### Issues Encountered
+
+**Broken Anchor Link:**
+- After renaming `click_mb_scanner.py` references to `click_modbus_scanner.py`, the table of contents anchor link in USAGE.md was broken
+- Link `#modbus-scanner-click_mb_scannerpy` needed to match new header anchor `#modbus-scanner-click_modbus_scannerpy`
+- Lesson: When renaming items referenced in Markdown headers, also update corresponding anchor links
+
+### Lessons Learned
+
+1. **Project naming should anticipate scope expansion**
+   - Original name `clickplc_modbus` became limiting when EtherNet/IP and NSE scripts were added
+   - `click-plc-scanner` is protocol-agnostic and more descriptive
+
+2. **Consistent file naming prevents documentation drift**
+   - Actual file `click_modbus_scanner.py` was documented as `click_mb_scanner.py` in multiple places
+   - Standardize naming early and enforce through review
+
+3. **Phased rename approach reduces errors**
+   - Breaking rename into phases (Claude files, user docs, code files) allows incremental review
+   - Verify each phase before proceeding to catch issues early
+
+4. **Use replace_all for systematic changes**
+   - When a string appears multiple times, `replace_all` ensures consistency
+   - Follow up with grep search to verify no occurrences were missed
+
+5. **Anchor links are auto-generated from headers**
+   - Markdown converts headers to lowercase, replaces spaces with hyphens, removes special characters
+   - When updating header text, must also update any anchor links pointing to it
+
+---
+
 ## Session: 2025-01-05 (Initial Planning)
 
 ### Lessons Learned

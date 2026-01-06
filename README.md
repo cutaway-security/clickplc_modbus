@@ -6,7 +6,7 @@ Scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. D
 
 | Script | Protocol | Port | Purpose |
 |--------|----------|------|---------|
-| click_mb_scanner.py | Modbus TCP | 502 | Read coils and registers |
+| click_modbus_scanner.py | Modbus TCP | 502 | Read coils and registers |
 | click_enip_scanner.py | EtherNet/IP CIP | 44818 | Read device info and assembly data |
 | click-plc-info.nse | Modbus + ENIP | 502, 44818 | Nmap NSE script for combined scanning |
 
@@ -26,7 +26,7 @@ pip install -r requirements.txt
 
 ---
 
-## Modbus Scanner (click_mb_scanner.py)
+## Modbus Scanner (click_modbus_scanner.py)
 
 ### Features
 
@@ -40,19 +40,19 @@ pip install -r requirements.txt
 
 ```bash
 # Scan common address types
-python click_mb_scanner.py 192.168.0.10
+python click_modbus_scanner.py 192.168.0.10
 
 # Scan specific types
-python click_mb_scanner.py 192.168.0.10 --type DS,DF,X0
+python click_modbus_scanner.py 192.168.0.10 --type DS,DF,X0
 
 # Use CLICK project CSV for tag names
-python click_mb_scanner.py 192.168.0.10 --config project_export.csv
+python click_modbus_scanner.py 192.168.0.10 --config project_export.csv
 
 # Save results to file
-python click_mb_scanner.py 192.168.0.10 --output results.csv
+python click_modbus_scanner.py 192.168.0.10 --output results.csv
 
 # List available address types
-python click_mb_scanner.py --list
+python click_modbus_scanner.py --list
 ```
 
 ---

@@ -1,7 +1,7 @@
 # CLICK PLC Scanner Dependencies
 # Python 3.11+ required
 
-# Modbus TCP support (click_mb_scanner.py)
+# Modbus TCP support (click_modbus_scanner.py)
 pymodbus>=3.6.0,<4.0.0
 
 # EtherNet/IP CIP support (click_enip_scanner.py)

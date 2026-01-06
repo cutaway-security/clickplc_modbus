@@ -4,14 +4,14 @@
 
 Python scripts and Nmap NSE script to scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
 
-**Repository**: https://github.com/cutaway-security/clickplc_modbus
+**Repository**: https://github.com/cutaway-security/click-plc-scanner
 **Development Branch**: claude-dev
 
 ### Scripts
 
 | Script | Language | Protocol | Purpose |
 |--------|----------|----------|---------|
-| click_mb_scanner.py | Python | Modbus TCP | Read coils and registers via Modbus |
+| click_modbus_scanner.py | Python | Modbus TCP | Read coils and registers via Modbus |
 | click_enip_scanner.py | Python | EtherNet/IP CIP | Read assembly data via CIP Explicit Messaging |
 | click-plc-info.nse | Lua (Nmap) | Modbus TCP + ENIP | Combined detection and info gathering |
 
@@ -43,7 +43,7 @@ Before starting any development session, read these documents in order:
 
 ## Technical Constraints
 
-### Modbus Scanner (click_mb_scanner.py)
+### Modbus Scanner (click_modbus_scanner.py)
 
 | Constraint | Value |
 |------------|-------|
@@ -176,18 +176,21 @@ Testing will be conducted against:
 ## File Structure
 
 ```
-clickplc_scanner/
-    click_mb_scanner.py       # Modbus TCP scanner (complete)
+click-plc-scanner/
+    click_modbus_scanner.py   # Modbus TCP scanner (complete)
     click_enip_scanner.py     # EtherNet/IP CIP scanner (complete)
-    click-plc-info.nse        # Nmap NSE script (in development)
+    click-plc-info.nse        # Nmap NSE script (complete)
     claude.md                 # This file
     requirements.txt          # Python dependencies
     README.md                 # User documentation
     USAGE.md                  # Detailed usage guide
     LICENSE                   # Project license
-    ARCHITECTURE.md           # System design
-    PLAN.md                   # Project roadmap
-    RESUME.md                 # Session status
-    CLICKPLUS_*.csv           # Test CSV files
-    CLICK_*.pdf               # Reference documentation
+    docs/
+        ARCHITECTURE.md       # System design
+        PLAN.md               # Project roadmap
+        RESUME.md             # Session status
+        VIBE_HISTORY.md       # Development lessons learned
+        GIT_RELEASE_STEPS.md  # Release process
+        CLICKPLUS_*.csv       # Test CSV files
+        CLICK_*.pdf           # Reference documentation
 ```

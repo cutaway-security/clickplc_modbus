@@ -4,15 +4,22 @@
 
 | Script | Status | Current Phase |
 |--------|--------|---------------|
-| click_mb_scanner.py | COMPLETE | - |
+| click_modbus_scanner.py | COMPLETE | - |
 | click_enip_scanner.py | COMPLETE | - |
-| click-plc-info.nse | COMPLETE | Phase 6 - Integration and Polish |
+| click-plc-info.nse | COMPLETE | - |
+
+**Project Status**: All development complete. Project renamed from `clickplc_modbus` to `click-plc-scanner`.
 
 ---
 
 ## Currently Working On
 
 All scripts are complete. No active development tasks.
+
+Project maintenance tasks completed:
+- Project renamed from `clickplc_modbus` to `click-plc-scanner`
+- Documentation updated to reflect new project name
+- Script references standardized to `click_modbus_scanner.py`
 
 ---
 
@@ -73,7 +80,7 @@ All phases complete:
 - Phase 4: Output and CLI
 - Phase 5: Polish
 
-### Modbus Scanner (click_mb_scanner.py) - COMPLETE
+### Modbus Scanner (click_modbus_scanner.py) - COMPLETE
 
 All phases complete:
 - Phase 1: Foundation
@@ -148,6 +155,18 @@ None currently.
 ---
 
 ## Session Log
+
+### 2026-01-06 (Project Rename Complete)
+- Renamed project from `clickplc_modbus` to `click-plc-scanner`
+- Updated repository URL in all files: `https://github.com/cutaway-security/click-plc-scanner`
+- Standardized script references from `click_mb_scanner.py` to `click_modbus_scanner.py` (actual filename)
+- Updated 11 files across 3 phases:
+  - Phase 1: Claude files (claude.md, PLAN.md, RESUME.md, ARCHITECTURE.md, GIT_RELEASE_STEPS.md, VIBE_HISTORY.md)
+  - Phase 2: User documentation (README.md, USAGE.md)
+  - Phase 3: Code files (requirements.txt, click_modbus_scanner.py, click_enip_scanner.py)
+- Fixed broken anchor link in USAGE.md table of contents
+- Total changes: 26 edits across 11 files
+- All project documentation now reflects new project name
 
 ### 2026-01-06 (NSE Phase 6 Complete - Integration and Polish)
 - Added script argument validation (unit-id 0-247, coil-count 1-100, reg-count 1-100)

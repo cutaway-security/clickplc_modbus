@@ -7,7 +7,7 @@ Designed for ICS/OT cybersecurity students and assessment personnel conducting
 authorized testing.
 
 Author:  Don C. Weber (cutaway)
-Repository: https://github.com/cutaway-security/clickplc_modbus
+Repository: https://github.com/cutaway-security/click-plc-scanner
 """
 
 import sys

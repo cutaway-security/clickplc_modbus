@@ -2,9 +2,9 @@
 
 ## Current Status
 
-**Active Development**: NSE Script (click-plc-info.nse)
-**Phase**: 1 - Script Skeleton
-**Last Updated**: 2026-01-05
+**Active Development**: None - All scripts complete
+**Phase**: Project Complete
+**Last Updated**: 2026-01-06
 
 ---
 
@@ -14,9 +14,9 @@ This project contains three scanner scripts:
 
 | Script | Protocol | Language | Status |
 |--------|----------|----------|--------|
-| click_mb_scanner.py | Modbus TCP | Python | COMPLETE |
+| click_modbus_scanner.py | Modbus TCP | Python | COMPLETE |
 | click_enip_scanner.py | EtherNet/IP CIP | Python | COMPLETE |
-| click-plc-info.nse | Modbus + ENIP | Lua (Nmap) | IN PROGRESS |
+| click-plc-info.nse | Modbus + ENIP | Lua (Nmap) | COMPLETE |
 
 ---
 
@@ -52,14 +52,14 @@ The EtherNet/IP scanner is feature-complete. See Session Log in RESUME.md for de
 
 | Phase | Name | Status | Description |
 |-------|------|--------|-------------|
-| 1 | Script Skeleton | NOT STARTED | Portrule, args, basic structure |
-| 2 | ENIP TCP | NOT STARTED | List Identity over TCP |
-| 3 | ENIP UDP | NOT STARTED | List Identity over UDP |
-| 4 | Modbus Helpers | NOT STARTED | Frame building and parsing |
-| 5 | Modbus Device Info | NOT STARTED | SD register queries |
-| 6 | Modbus I/O Query | NOT STARTED | X, Y, DS, DD reading |
-| 7 | Output Formatting | NOT STARTED | Combined output table |
-| 8 | Testing and Docs | NOT STARTED | Validation and documentation |
+| 1 | Script Skeleton | COMPLETE | Portrule, args, basic structure |
+| 2 | ENIP TCP | COMPLETE | List Identity over TCP |
+| 3 | ENIP UDP | COMPLETE | List Identity over UDP |
+| 4 | Modbus Helpers | COMPLETE | Frame building and parsing |
+| 5 | Modbus Device Info | COMPLETE | SD register queries |
+| 6 | Integration and Polish | COMPLETE | Argument validation, documentation |
+
+The NSE script is feature-complete. See Session Log in RESUME.md for details.
 
 ---
 
