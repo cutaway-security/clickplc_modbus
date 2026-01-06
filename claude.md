@@ -2,17 +2,18 @@
 
 ## Project Overview
 
-Python scripts to scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
+Python scripts and Nmap NSE script to scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
 
 **Repository**: https://github.com/cutaway-security/clickplc_modbus
 **Development Branch**: claude-dev
 
 ### Scripts
 
-| Script | Protocol | Purpose |
-|--------|----------|---------|
-| click_mb_scanner.py | Modbus TCP | Read coils and registers via Modbus |
-| click_enip_scanner.py | EtherNet/IP CIP | Read assembly data via CIP Explicit Messaging |
+| Script | Language | Protocol | Purpose |
+|--------|----------|----------|---------|
+| click_mb_scanner.py | Python | Modbus TCP | Read coils and registers via Modbus |
+| click_enip_scanner.py | Python | EtherNet/IP CIP | Read assembly data via CIP Explicit Messaging |
+| click-plc-info.nse | Lua (Nmap) | Modbus TCP + ENIP | Combined detection and info gathering |
 
 ---
 
@@ -65,17 +66,40 @@ Before starting any development session, read these documents in order:
 
 **Note**: pycomm3 replaced CPPPO due to compatibility issues with CLICK PLCs.
 
+### NSE Script (click-plc-info.nse)
+
+| Constraint | Value |
+|------------|-------|
+| Language | Lua |
+| Framework | Nmap NSE |
+| Protocols | Modbus TCP (502), EtherNet/IP (44818) |
+| ENIP Transport | TCP (default), UDP (optional) |
+| Operations | Read-only |
+| Categories | discovery, version |
+
 ---
 
 ## Code Quality Standards
 
+### All Scripts
+
 - Every network operation must handle timeouts and have fallback behavior
 - Log errors properly - never swallow exceptions silently
 - Validate inputs at system boundaries (IP address, port, address ranges)
-- Include type hints on all function signatures
+- Include type hints on all function signatures (Python only)
 - Prefer strong verbs over adjective-heavy descriptions in comments
 - All protocol interactions must respect safety constraints
 - Check for required libraries at startup with clear error message if missing
+
+### NSE Script Specific (Lua)
+
+- Use `local` for all variables and functions (avoid global namespace pollution)
+- Use `stdnse.debug1()` for debug output, not `print()`
+- Use `stdnse.output_table()` for structured output
+- Follow Nmap NSE library conventions for socket handling
+- Use `string.pack()` and `string.unpack()` for binary data (Lua 5.3+)
+- Handle both TCP and UDP socket types where applicable
+- Always close sockets in error handlers (use `nmap.new_try()` with catch)
 
 ---
 
@@ -104,7 +128,7 @@ When making changes, update the appropriate documents:
 
 ## Project Scope
 
-### Modbus Scanner - In Scope
+### Modbus Scanner (Python) - In Scope
 - Modbus TCP scanning of CLICK PLCs
 - Read operations (coils, discrete inputs, holding registers, input registers)
 - Console, CSV, and Markdown output
@@ -112,7 +136,7 @@ When making changes, update the appropriate documents:
 - Configurable scan rates (normal, moderate, slow)
 - HEX and 984 address format support
 
-### EtherNet/IP Scanner - In Scope
+### EtherNet/IP Scanner (Python) - In Scope
 - EtherNet/IP CIP Explicit Messaging to CLICK PLCs (CIP only, no Modbus)
 - Read Identity Object (device info via --info)
 - Read TCP/IP Interface and Ethernet Link Objects (network info via --network)
@@ -121,7 +145,16 @@ When making changes, update the appropriate documents:
 - Comprehensive view combining all info (--full)
 - Console and Markdown output
 
-### Out of Scope (Both Scanners)
+### NSE Script - In Scope
+- Combined Modbus TCP and EtherNet/IP detection
+- CLICK device information via Modbus SD registers
+- Basic I/O query (X, Y coils and DS, DD registers)
+- EtherNet/IP List Identity parsing
+- TCP and UDP support for ENIP
+- Script arguments for protocol selection and data quantity
+- Standard Nmap output format
+
+### Out of Scope (All Scripts)
 - Write operations
 - Multi-PLC scanning
 - Network discovery/subnet scanning
@@ -145,7 +178,8 @@ Testing will be conducted against:
 ```
 clickplc_scanner/
     click_mb_scanner.py       # Modbus TCP scanner (complete)
-    click_enip_scanner.py     # EtherNet/IP CIP scanner (in development)
+    click_enip_scanner.py     # EtherNet/IP CIP scanner (complete)
+    click-plc-info.nse        # Nmap NSE script (in development)
     claude.md                 # This file
     requirements.txt          # Python dependencies
     README.md                 # User documentation

@@ -2,10 +2,11 @@
 
 ## Overview
 
-This project contains two Python scripts for scanning AutomationDirect CLICK PLCs:
+This project contains three scripts for scanning AutomationDirect CLICK PLCs:
 
 1. **click_mb_scanner.py** - Modbus TCP scanner (COMPLETE)
-2. **click_enip_scanner.py** - EtherNet/IP CIP scanner (IN DEVELOPMENT)
+2. **click_enip_scanner.py** - EtherNet/IP CIP scanner (COMPLETE)
+3. **click-plc-info.nse** - Nmap NSE combined scanner (IN DEVELOPMENT)
 
 ---
 
@@ -256,40 +257,18 @@ Two export formats are available from CLICK Programming Software:
 
 #### HEX Format
 - Modbus Address uses hex with 'h' suffix (e.g., "0000h", "4001h", "7000h")
-- Parse by stripping 'h' suffix and converting from hexadecimal
+- File typically named with "_HEX" suffix
 
 #### 984 Format
-- Modbus Address uses decimal (e.g., "100001", "400001", "428673")
-- Standard 984 ranges: FC02 (1xxxxx), FC03 (4xxxxx), FC04 (3xxxxx)
-- CLICK uses non-standard ranges for some coil types (Y, C)
+- Modbus Address uses 984 convention (e.g., "400001", "404001", "407001")
+- File typically named with "_984" suffix
 
-### CSV Columns
+### Auto-Detection Logic
 
-| Column | Description | Example |
-|--------|-------------|---------|
-| Address | CLICK address | "X001", "DS1", "DD3" |
-| Data Type | BIT, INT, INT2, FLOAT | "BIT", "INT2", "FLOAT" |
-| Modbus Address | HEX or 984 format | "0000h" or "100001" |
-| Function Code | FC codes (quoted) | "FC=02", "FC=03,06,16" |
-| Nickname | Tag name (may be empty) | "Tank_PSI_Display" |
-| Initial Value | Default value | 0 |
-| Retentive | Memory retention | "Yes", "No" |
-| Address Comment | Description (ignored) | "Tank Pressure Display" |
-
-### Nickname Handling
-- Use Nickname field for display when available
-- For empty nicknames, use CLICK Address as display name
-- Do not truncate nicknames (important info may be at end)
-
-### Test Files
-- CLICKPLUS_C203CPU2_w2_C208DR6V_3_41_Modbus_Addresses_HEX.csv
-- CLICKPLUS_C203CPU2_w2_C208DR6V_3_41_Modbus_Addresses_984.csv
-
-### Filtering Logic
-1. Parse CSV file (auto-detect HEX vs 984 format)
-2. Extract all addresses from CSV
-3. Group by address type
-4. Generate scan list with nicknames
+The script auto-detects format by checking the first data row:
+1. If Modbus Address ends with 'h' -> HEX format
+2. If Modbus Address is numeric and > 100000 -> 984 format
+3. Otherwise -> Error
 
 ---
 
@@ -297,87 +276,53 @@ Two export formats are available from CLICK Programming Software:
 
 ## Overview
 
-Single Python script that communicates with AutomationDirect CLICK PLCs via EtherNet/IP CIP Explicit Messaging to read configured data assemblies and device information. Outputs results to console or Markdown.
+Single Python script that communicates with AutomationDirect CLICK PLCs via EtherNet/IP CIP Explicit Messaging. Reads device identity, network configuration, and assembly data. Outputs to console or Markdown.
 
 ---
 
-## Protocol Details
+## CIP Object Model
 
-| Parameter | Value |
-|-----------|-------|
-| Protocol | EtherNet/IP CIP |
-| Port | 44818 (default) |
-| Messaging Type | Explicit (Unconnected) |
-| Service | Get Attribute Single (0x0E) |
-| Library | CPPPO 5.x (proxy_simple) |
+### Identity Object (Class 0x01)
 
-**Important Notes**:
-- CLICK operates as an Adapter (responds to connections, does not initiate)
-- CLICK does NOT support Tag-Based (Symbolic) messaging or PCCC
-- Maximum 2 concurrent EtherNet/IP connections
-- Must use CPPPO's proxy_simple class (simple CIP device, not routing)
+| Attribute | ID | Type | Description |
+|-----------|-----|------|-------------|
+| Vendor ID | 1 | UINT | 898 = AutomationDirect |
+| Device Type | 2 | UINT | 14 = PLC |
+| Product Code | 3 | UINT | Model identifier |
+| Revision | 4 | STRUCT | Major.Minor |
+| Status | 5 | WORD | Device status flags |
+| Serial Number | 6 | UDINT | Unique identifier |
+| Product Name | 7 | STRING | Device name |
 
----
+### TCP/IP Interface Object (Class 0xF5)
 
-## CIP Addressing
+| Attribute | ID | Type | Description |
+|-----------|-----|------|-------------|
+| Status | 1 | DWORD | Interface status |
+| Config Capability | 2 | DWORD | Configuration options |
+| Config Control | 3 | DWORD | Active configuration |
+| Physical Link | 4 | STRUCT | Link object path |
+| Interface Config | 5 | STRUCT | IP, Subnet, Gateway, DNS |
+| Host Name | 6 | STRING | Device hostname |
 
-CLICK exposes data via Assembly Objects with fixed Class/Instance/Attribute paths:
+### Ethernet Link Object (Class 0xF6)
 
-| Connection | Direction | Object Class | Instance | Attribute | CPPPO Path |
-|------------|-----------|--------------|----------|-----------|------------|
-| 1 | Input (T->O) | 4 | 101 (0x65) | 3 | @4/101/3 |
-| 1 | Output (O->T) | 4 | 102 (0x66) | 3 | @4/102/3 |
-| 2 | Input (T->O) | 4 | 103 (0x67) | 3 | @4/103/3 |
-| 2 | Output (O->T) | 4 | 104 (0x68) | 3 | @4/104/3 |
+| Attribute | ID | Type | Description |
+|-----------|-----|------|-------------|
+| Interface Speed | 1 | UDINT | Speed in Mbps |
+| Interface Flags | 2 | DWORD | Link status flags |
+| Physical Address | 3 | ARRAY[6] | MAC address |
 
-**Note**: Input data is what CLICK sends TO the scanner. Output data is what the scanner writes TO CLICK (not used in read-only mode).
+### Assembly Object (Class 0x04)
 
----
+| Instance | Direction | Description |
+|----------|-----------|-------------|
+| 100 | Output | Data TO scanner (Connection 1) |
+| 101 | Input | Data FROM scanner (Connection 1) |
+| 102 | Output | Data TO scanner (Connection 2) |
+| 103 | Input | Data FROM scanner (Connection 2) |
 
-## Standard CIP Objects
-
-| Object | Class | Instance | Attributes | Purpose |
-|--------|-------|----------|------------|---------|
-| Identity | 0x01 | 1 | 1-7 | Device identification (--info) |
-| TCP/IP Interface | 0xF5 | 1 | Various | Network configuration (--network) |
-| Ethernet Link | 0xF6 | 1 | Various | Ethernet statistics (--network) |
-| Assembly | 0x04 | 101-104 | 3 | Configured data blocks (default) |
-
-### Identity Object Attributes (Class 0x01, Instance 1)
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| 1 | UINT | Vendor ID |
-| 2 | UINT | Device Type |
-| 3 | UINT | Product Code |
-| 4 | Revision | Major.Minor Revision |
-| 5 | WORD | Status |
-| 6 | UDINT | Serial Number |
-| 7 | SHORT_STRING | Product Name |
-
-### TCP/IP Interface Object Attributes (Class 0xF5, Instance 1)
-
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| 1 | UDINT | Status |
-| 2 | UDINT | Configuration Capability |
-| 3 | UDINT | Configuration Control |
-| 5 | Struct | Interface Configuration (IP, Subnet, Gateway) |
-| 6 | STRING | Host Name |
-
----
-
-## Known Test Configuration
-
-The test PLC has the following EtherNet/IP Adapter configuration:
-
-**Connection 1 Input (to Scanner):**
-
-| CLICK Address | Range | Byte Offset | Size | Data Type |
-|---------------|-------|-------------|------|-----------|
-| DS1-DS72 | 72 registers | 0-143 | 144 bytes | INT16 |
-| DD3-DD74 | 72 registers | 144-431 | 288 bytes | INT32 |
-| **Total** | | | **432 bytes** | |
+**Note**: CLICK uses Input Assembly (Instance 101/103) for reading PLC data.
 
 ---
 
@@ -638,3 +583,374 @@ CPPPO was originally planned but has compatibility issues with CLICK PLCs:
 | pycomm3 | 1.x+ | EtherNet/IP CIP | Yes |
 
 **Note**: This scanner uses EtherNet/IP CIP only - no Modbus dependency.
+
+---
+
+# Part 3: NSE Script (click-plc-info.nse)
+
+## Overview
+
+Nmap NSE script that combines Modbus TCP and EtherNet/IP detection for CLICK PLCs. Provides device information, network configuration, and basic I/O data query in a single scan.
+
+---
+
+## Script Organization
+
+```
+click-plc-info.nse
+    |
+    +-- Section: Headers
+    |       - description, usage, output examples
+    |       - author, license, categories
+    |
+    +-- Section: Requirements
+    |       - local imports (comm, nmap, shortport, stdnse, string, table)
+    |
+    +-- Section: Portrule
+    |       - Match ports 502 (Modbus) and 44818 (ENIP)
+    |       - Support TCP and UDP
+    |
+    +-- Section: Lookup Tables
+    |       - vendor_id (minimal: AutomationDirect, Rockwell, etc.)
+    |       - device_type (PLC, Communications Adapter, etc.)
+    |
+    +-- Section: ENIP Functions
+    |       - form_enip_list_identity() - Build List Identity packet
+    |       - parse_enip_response() - Extract device info
+    |       - enip_scan() - Main ENIP handler
+    |
+    +-- Section: Modbus Functions
+    |       - form_modbus_request() - Build MBAP + PDU
+    |       - parse_modbus_response() - Extract data bytes
+    |       - read_input_registers() - FC 04 wrapper
+    |       - read_holding_registers() - FC 03 wrapper
+    |       - read_coils() - FC 01 wrapper
+    |       - read_discrete_inputs() - FC 02 wrapper
+    |       - modbus_scan() - Main Modbus handler
+    |
+    +-- Section: Data Conversion
+    |       - bytes_to_int16() - Little-endian signed 16-bit
+    |       - bytes_to_int32() - Little-endian signed 32-bit
+    |       - format_ip() - Dotted decimal
+    |       - format_mac() - Colon-separated hex
+    |       - format_firmware() - Version string
+    |
+    +-- Section: Action
+            - action(host, port) - Main entry point
+            - Protocol detection and routing
+            - Result aggregation
+```
+
+---
+
+## Script Arguments
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `click-plc-info.modbus-only` | boolean | false | Skip ENIP, scan Modbus only |
+| `click-plc-info.enip-only` | boolean | false | Skip Modbus, scan ENIP only |
+| `click-plc-info.unit-id` | integer | 0 | Modbus Unit ID |
+| `click-plc-info.coil-count` | integer | 10 | Number of X/Y coils to read |
+| `click-plc-info.reg-count` | integer | 10 | Number of DS/DD registers to read |
+| `click-plc-info.udp` | boolean | false | Use UDP for ENIP (default TCP) |
+
+---
+
+## Protocol Detection
+
+```lua
+portrule = shortport.port_or_service({502, 44818}, {"modbus", "EtherNet-IP-2"}, {"tcp", "udp"})
+```
+
+### Action Logic
+
+```
+if port == 502 then
+    return modbus_scan(host, port)
+elseif port == 44818 then
+    return enip_scan(host, port)
+end
+```
+
+---
+
+## Modbus Data Collection
+
+### Device Information (SD Registers)
+
+| Data | SD Address | Modbus HEX | FC | Words |
+|------|------------|------------|-----|-------|
+| Firmware Version | SD5-SD8 | 0xF004-F007 | 04 | 4 |
+| IP Address | SD80-SD83 | 0xF04F-F052 | 04 | 4 |
+| Subnet Mask | SD84-SD87 | 0xF053-F056 | 04 | 4 |
+| Gateway | SD88-SD91 | 0xF057-F05A | 04 | 4 |
+| MAC Address | SD188-SD193 | 0xF0BB-F0C0 | 04 | 6 |
+| EIP Status | SD101-SD102 | 0xF064-F065 | 04 | 2 |
+
+### I/O Data
+
+| Data | Type | FC | Start Address | Default Count |
+|------|------|-----|---------------|---------------|
+| Inputs (X) | Discrete Inputs | 02 | 0x0000 | 10 coils |
+| Outputs (Y) | Coils | 01 | 0x2000 | 10 coils |
+| DS Registers | Holding Registers | 03 | 0x0000 | 10 registers |
+| DD Registers | Holding Registers | 03 | 0x4000 | 10 registers (20 words) |
+
+### Modbus TCP Frame Format
+
+```
+MBAP Header (7 bytes):
+  [0-1] Transaction ID: 0x0001 (increment per request)
+  [2-3] Protocol ID: 0x0000 (Modbus)
+  [4-5] Length: number of following bytes
+  [6]   Unit ID: 0x00 (default for CLICK)
+
+PDU:
+  [0]   Function Code: 01, 02, 03, or 04
+  [1-2] Starting Address: big-endian
+  [3-4] Quantity: big-endian
+```
+
+### Response Parsing
+
+```
+MBAP Header (7 bytes): same as request
+PDU:
+  [0]   Function Code: echoed (or +0x80 for exception)
+  [1]   Byte Count: number of data bytes
+  [2-n] Data: coils packed as bits, registers as 2-byte words
+```
+
+---
+
+## ENIP Data Collection
+
+### List Identity Packet
+
+```
+Encapsulation Header (24 bytes):
+  [0-1]   Command: 0x0063 (List Identity)
+  [2-3]   Length: 0x0000
+  [4-7]   Session Handle: 0x00000000
+  [8-11]  Status: 0x00000000
+  [12-19] Sender Context: 8 bytes (arbitrary)
+  [20-23] Options: 0x00000000
+```
+
+### Response Parsing
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 0 | Command | 2 | 0x0063 |
+| 2 | Length | 2 | Data length |
+| 24 | Item Count | 2 | Number of items |
+| 26 | Type ID | 2 | 0x000C (Identity) |
+| 28 | Length | 2 | Identity data length |
+| 30 | Encap Version | 2 | Protocol version |
+| 32 | Socket Address | 16 | IP and port |
+| 48 | Vendor ID | 2 | Vendor identifier |
+| 50 | Device Type | 2 | Device category |
+| 52 | Product Code | 2 | Model number |
+| 54 | Revision | 2 | Major.Minor |
+| 56 | Status | 2 | Device status |
+| 58 | Serial Number | 4 | Unique ID |
+| 62 | Product Name Length | 1 | String length |
+| 63 | Product Name | var | Device name |
+| +1 | State | 1 | Device state |
+
+---
+
+## Vendor ID Table (Minimal)
+
+```lua
+local vendor_id = {
+    [0] = "Reserved",
+    [1] = "Rockwell Automation/Allen-Bradley",
+    [47] = "Omron",
+    [82] = "Mitsubishi Electric",
+    [145] = "Siemens",
+    [898] = "AutomationDirect",
+}
+```
+
+---
+
+## Device Type Table
+
+```lua
+local device_type = {
+    [0] = "Generic Device",
+    [2] = "AC Drive",
+    [7] = "General Purpose Discrete I/O",
+    [12] = "Communications Adapter",
+    [14] = "Programmable Logic Controller",
+    [24] = "Human-Machine Interface",
+    [43] = "Generic Device (keyable)",
+}
+```
+
+---
+
+## Expected Output Format
+
+### Modbus (Port 502)
+
+```
+PORT      STATE SERVICE
+502/tcp   open  modbus
+| click-plc-info:
+|   Modbus Device Information:
+|     Firmware: 3.41
+|     IP Address: 192.168.0.10
+|     Subnet Mask: 255.255.255.0
+|     Gateway: 192.168.0.1
+|     MAC Address: 00:0D:7C:1A:42:44
+|     EIP Enabled: Yes (Status: 0x0001)
+|   Inputs (X001-X010): 0 0 0 0 0 0 0 0 0 0
+|   Outputs (Y001-Y010): 0 0 0 1 0 0 0 0 0 0
+|   DS Registers (DS1-DS10): 0, 100, 0, 0, 0, 0, 0, 0, 0, 0
+|_  DD Registers (DD1-DD10): 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+```
+
+### ENIP (Port 44818)
+
+```
+PORT       STATE SERVICE
+44818/tcp  open  EtherNet-IP-2
+| click-plc-info:
+|   Vendor: AutomationDirect (898)
+|   Device Type: Programmable Logic Controller (14)
+|   Product Name: CLICK PLUS CPU
+|   Serial Number: 0x12345678
+|   Product Code: 1234
+|   Revision: 3.41
+|   Status: 0x0030
+|_  State: 0x03
+```
+
+---
+
+## Data Type Conversions
+
+### INT16 (DS Registers)
+
+```lua
+local function bytes_to_int16(b1, b2)
+    local val = b1 + (b2 * 256)  -- little-endian
+    if val >= 32768 then
+        val = val - 65536  -- signed
+    end
+    return val
+end
+```
+
+### INT32 (DD Registers)
+
+```lua
+local function bytes_to_int32(b1, b2, b3, b4)
+    -- Little-endian word order: low word first
+    local low_word = b1 + (b2 * 256)
+    local high_word = b3 + (b4 * 256)
+    local val = low_word + (high_word * 65536)
+    if val >= 2147483648 then
+        val = val - 4294967296  -- signed
+    end
+    return val
+end
+```
+
+### IP Address
+
+```lua
+local function format_ip(b1, b2, b3, b4)
+    return string.format("%d.%d.%d.%d", b1, b2, b3, b4)
+end
+```
+
+### MAC Address
+
+```lua
+local function format_mac(b1, b2, b3, b4, b5, b6)
+    return string.format("%02X:%02X:%02X:%02X:%02X:%02X", b1, b2, b3, b4, b5, b6)
+end
+```
+
+---
+
+## Error Handling
+
+### Modbus Exceptions
+
+| Code | Name | Action |
+|------|------|--------|
+| 0x01 | Illegal Function | Skip, continue |
+| 0x02 | Illegal Data Address | Skip, continue |
+| 0x03 | Illegal Data Value | Skip, continue |
+| 0x04 | Slave Device Failure | Skip, continue |
+
+On exception or timeout, omit that data section from output (minimal error reporting).
+
+### ENIP Errors
+
+On invalid response or timeout, return nil (no output for that port).
+
+---
+
+## Socket Handling
+
+### TCP (Default)
+
+```lua
+local socket = nmap.new_socket()
+socket:set_timeout(stdnse.get_timeout(host))
+local status, err = socket:connect(host, port)
+-- send/receive
+socket:close()
+```
+
+### UDP (ENIP only)
+
+```lua
+local socket = nmap.new_socket("udp")
+socket:set_timeout(stdnse.get_timeout(host))
+local status, err = socket:connect(host, port)
+-- send/receive
+socket:close()
+```
+
+---
+
+## Dependencies
+
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| Nmap | 7.x+ | NSE runtime |
+| Lua | 5.3+ | Scripting (bundled with Nmap) |
+
+---
+
+## Usage Examples
+
+### Scan Both Protocols
+
+```bash
+nmap --script click-plc-info -p 502,44818 192.168.0.10
+```
+
+### Modbus Only
+
+```bash
+nmap --script click-plc-info --script-args='click-plc-info.modbus-only=true' -p 502 192.168.0.10
+```
+
+### ENIP Only (UDP)
+
+```bash
+nmap --script click-plc-info --script-args='click-plc-info.enip-only=true,click-plc-info.udp=true' -sU -p 44818 192.168.0.10
+```
+
+### Custom Unit ID and Counts
+
+```bash
+nmap --script click-plc-info --script-args='click-plc-info.unit-id=1,click-plc-info.coil-count=20,click-plc-info.reg-count=20' -p 502 192.168.0.10
+```

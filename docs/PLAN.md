@@ -2,24 +2,25 @@
 
 ## Current Status
 
-**Phase**: 5 - Polish (COMPLETE)
-**Step**: All steps complete
+**Active Development**: NSE Script (click-plc-info.nse)
+**Phase**: 1 - Script Skeleton
 **Last Updated**: 2026-01-05
 
 ---
 
 ## Project Scope
 
-This project contains two scanner scripts:
+This project contains three scanner scripts:
 
-| Script | Protocol | Status |
-|--------|----------|--------|
-| click_mb_scanner.py | Modbus TCP | COMPLETE |
-| click_enip_scanner.py | EtherNet/IP CIP | IN PROGRESS |
+| Script | Protocol | Language | Status |
+|--------|----------|----------|--------|
+| click_mb_scanner.py | Modbus TCP | Python | COMPLETE |
+| click_enip_scanner.py | EtherNet/IP CIP | Python | COMPLETE |
+| click-plc-info.nse | Modbus + ENIP | Lua (Nmap) | IN PROGRESS |
 
 ---
 
-## Modbus Scanner Status
+## Modbus Scanner Status (Python)
 
 | Phase | Name | Status |
 |-------|------|--------|
@@ -33,182 +34,249 @@ The Modbus scanner is feature-complete. See Session Log in RESUME.md for details
 
 ---
 
-## EtherNet/IP Scanner Phases
+## EtherNet/IP Scanner Status (Python)
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 1 | Foundation | COMPLETE |
+| 2 | Device Info | COMPLETE |
+| 3 | Data Retrieval | COMPLETE |
+| 4 | Output and CLI | COMPLETE |
+| 5 | Polish | COMPLETE |
+
+The EtherNet/IP scanner is feature-complete. See Session Log in RESUME.md for details.
+
+---
+
+## NSE Script Phases (click-plc-info.nse)
 
 | Phase | Name | Status | Description |
 |-------|------|--------|-------------|
-| 1 | Foundation | COMPLETE | Project setup, library testing, basic connectivity |
-| 2 | Device Info | COMPLETE | Identity and Network object reading |
-| 3 | Data Retrieval | COMPLETE | Assembly data reading, multi-format interpretation |
-| 4 | Output and CLI | COMPLETE | Formatting, --full option, Markdown output |
-| 5 | Polish | COMPLETE | Error handling, documentation |
-
-**Note**: Original Phase 4 (System Config) was removed. The hybrid ENIP+Modbus --sysconfig
-feature is out of scope - this scanner uses EtherNet/IP CIP only. Network and device
-information is already available via --info and --network options.
-
----
-
-## Phase 1: Foundation
-
-### 1.1 Project Setup (COMPLETE)
-- [x] Update claude.md with ENIP scope
-- [x] Update ARCHITECTURE.md with ENIP design
-- [x] Update PLAN.md (this file)
-- [x] Update RESUME.md for ENIP tracking
-- [x] Add cpppo>=5.0.0 to requirements.txt
-
-### 1.2 Library Testing (COMPLETE)
-- [x] Install cpppo and verify import (v5.2.5)
-- [x] Test basic session registration with CLICK PLC (port 44818)
-- [x] Test proxy_simple for CLICK - ISSUE: read() returns "Service not supported"
-- [x] Test path syntax: @class/instance/attribute - works in attribute_operations()
-- [x] Document CPPPO quirks - see notes below
-- [x] Test pycomm3 as alternative - SUCCESS: CIPDriver.generic_message() works
-- [x] Confirm data type handling for byte arrays - raw bytes returned correctly
-
-**Library Decision**: Use pycomm3.CIPDriver instead of CPPPO for CIP operations.
-CPPPO list_identity() works but attribute reads fail with "Service not supported".
-pycomm3 generic_message() works for all CIP services on CLICK.
-
-**Verified Working:**
-- Identity Object (0x01): All attributes 1-7
-- TCP/IP Interface (0xF5): Attributes 1-6
-- Ethernet Link (0xF6): Attributes 1-3
-- Assembly Object (0x04): Instance 101, Attribute 3 (432 bytes)
-
-### 1.3 Script Skeleton (COMPLETE)
-- [x] Create click_enip_scanner.py with section comments
-- [x] Implement pycomm3 dependency check with graceful failure
-- [x] Implement basic argument parser (host, --port, --timeout)
-- [x] Implement connect_enip() using CIPDriver
-- [x] Verify script runs and shows help
-- [x] Test basic connection to real PLC
-
-**Exit Criteria**: Script connects to CLICK via ENIP, session registered - ACHIEVED
+| 1 | Script Skeleton | NOT STARTED | Portrule, args, basic structure |
+| 2 | ENIP TCP | NOT STARTED | List Identity over TCP |
+| 3 | ENIP UDP | NOT STARTED | List Identity over UDP |
+| 4 | Modbus Helpers | NOT STARTED | Frame building and parsing |
+| 5 | Modbus Device Info | NOT STARTED | SD register queries |
+| 6 | Modbus I/O Query | NOT STARTED | X, Y, DS, DD reading |
+| 7 | Output Formatting | NOT STARTED | Combined output table |
+| 8 | Testing and Docs | NOT STARTED | Validation and documentation |
 
 ---
 
-## Phase 2: Device Info
+## Phase 1: Script Skeleton
 
-### 2.1 Identity Object (COMPLETE)
-- [x] Implement get_identity() - Class 0x01, Instance 1
-- [x] Read Attribute 1: Vendor ID (UINT)
-- [x] Read Attribute 2: Device Type (UINT)
-- [x] Read Attribute 3: Product Code (UINT)
-- [x] Read Attribute 4: Revision (Major.Minor)
-- [x] Read Attribute 5: Status (WORD)
-- [x] Read Attribute 6: Serial Number (UDINT)
-- [x] Read Attribute 7: Product Name (SHORT_STRING)
-- [x] Implement --info CLI option
-- [x] Test against real PLC
+### 1.1 File Setup
+- [ ] Create click-plc-info.nse with standard NSE headers
+- [ ] Add description, author, license, categories
+- [ ] Define portrule for ports 502 and 44818 (TCP/UDP)
 
-### 2.2 Network Objects (COMPLETE)
-- [x] Implement get_tcp_ip_interface() - Class 0xF5, Instance 1
-- [x] Parse IP address, subnet mask, gateway from Attribute 5
-- [x] Implement get_ethernet_link() - Class 0xF6, Instance 1
-- [x] Parse MAC address, link speed
-- [x] Implement --network CLI option
-- [x] Test against real PLC
+### 1.2 Script Arguments
+- [ ] `click-plc-info.modbus-only` - Skip ENIP
+- [ ] `click-plc-info.enip-only` - Skip Modbus
+- [ ] `click-plc-info.unit-id` - Modbus Unit ID (default 0)
+- [ ] `click-plc-info.coil-count` - Number of coils to read (default 10)
+- [ ] `click-plc-info.reg-count` - Number of registers to read (default 10)
+- [ ] `click-plc-info.udp` - Use UDP for ENIP (default false)
 
-**Exit Criteria**: --info and --network return valid device data - ACHIEVED
+### 1.3 Action Function Stub
+- [ ] Detect protocol from port number
+- [ ] Route to Modbus or ENIP handler
+- [ ] Return empty output table
+
+**Exit Criteria**: Script loads in Nmap without errors, arguments parse correctly.
 
 ---
 
-## Phase 3: Data Retrieval
+## Phase 2: ENIP TCP
 
-### 3.1 Assembly Reading (COMPLETE)
-- [x] Implement get_assembly_data() - Class 0x04
-- [x] Support Instance 101 (Connection 1 Input) - default
-- [x] Support Instance 103 (Connection 2 Input) via --connection 2
-- [x] Read configurable byte count (--size, default 500)
-- [x] Handle size mismatch (requested vs actual) - shows warning
-- [x] Add --connection CLI option (1 or 2)
-- [x] Test against real PLC with known config (432 bytes)
+### 2.1 List Identity Request
+- [ ] Build List Identity packet (command 0x63)
+- [ ] Send via TCP socket to port 44818
+- [ ] Receive and validate response
 
-### 3.2 Multi-Format Interpretation (COMPLETE)
-- [x] Implement interpret_as_int16() - little-endian signed
-- [x] Implement interpret_as_uint16() - little-endian unsigned
-- [x] Implement interpret_as_int32() - little-endian signed
-- [x] Implement interpret_as_float() - IEEE 754 single precision
-- [x] Implement interpret_as_hex() - raw bytes as hex string
-- [x] Implement interpret_as_ascii() - printable characters only
-- [x] Implement multi_format_display() - combined view with alignment
+### 2.2 Response Parsing
+- [ ] Parse command response header
+- [ ] Extract device identity fields
+- [ ] Implement minimal vendor lookup table (AutomationDirect, Rockwell, etc.)
+- [ ] Implement device type lookup table
 
-### 3.3 Console Output (COMPLETE)
-- [x] Display header with target, connection, size
-- [x] Display offset column (hex)
-- [x] Display raw hex dump (16 bytes per row)
-- [x] Display INT16 interpretation
-- [x] Display INT32 interpretation
-- [x] Display ASCII interpretation (printable only)
-- [x] Align columns for readability
-- [x] Add --hex flag for legacy hex-only output
+### 2.3 Output Table
+- [ ] Populate output with Vendor, Device Type, Product Name
+- [ ] Add Serial Number, Product Code, Revision
+- [ ] Add Status, State, Device IP
 
-**Exit Criteria**: Default scan shows assembly data in multiple formats - ACHIEVED
+**Exit Criteria**: ENIP TCP scan returns device identity on port 44818.
 
 ---
 
-## Phase 4: Output and CLI
+## Phase 3: ENIP UDP
 
-### 4.1 Markdown Output (COMPLETE)
-- [x] Implement format_markdown() functions
-- [x] Include scan metadata (target, date, scanner version)
-- [x] Include device identity section
-- [x] Include network information section
-- [x] Include assembly data with hex dump
-- [x] Include interpreted data tables (INT16, INT32, FLOAT)
-- [x] Add --output argument (.md extension required)
-- [x] Include timestamp in output filename
+### 3.1 UDP Socket Handling
+- [ ] Create UDP socket option
+- [ ] Send List Identity packet via UDP
+- [ ] Handle UDP response
 
-### 4.2 CLI Polish (COMPLETE)
-- [x] Implement --full option (--info + --network + data)
-- [x] Verify --port works correctly (default 44818)
-- [x] Add --timeout for connection timeout
-- [x] Implement input validation (IP format, port range, size range)
-- [x] Add --help with clear usage examples
-- [x] Add mutually exclusive group for --info/--network/--full
+### 3.2 Integration
+- [ ] Check `click-plc-info.udp` argument
+- [ ] Route to TCP or UDP handler
+- [ ] Reuse parsing logic from Phase 2
 
-**Exit Criteria**: Full CLI working, Markdown output functional - ACHIEVED
+**Exit Criteria**: ENIP scan works over both TCP and UDP.
 
 ---
 
-## Phase 5: Polish
+## Phase 4: Modbus Helpers
 
-### 5.1 Error Handling (COMPLETE)
-- [x] Handle pycomm3 connection errors gracefully
-- [x] Parse CIP General Status codes with descriptions
-- [x] Parse CIP Extended Status codes with descriptions
-- [x] Reference CLICK EtherNet/IP Error Code documentation
-- [x] Add helpful error messages with troubleshooting hints
+### 4.1 Frame Building
+- [ ] `form_modbus_request(unit_id, function_code, start_addr, count)`
+- [ ] Build Modbus TCP/IP ADU (MBAP header + PDU)
+- [ ] Handle transaction ID generation
 
-### 5.2 Documentation (COMPLETE)
-- [x] Update README.md with ENIP scanner section
-- [x] Update USAGE.md with ENIP documentation
-- [x] Document CLI options with examples
-- [x] Document CIP addressing for CLICK
-- [x] Add troubleshooting section for common errors
+### 4.2 Response Parsing
+- [ ] `parse_modbus_response(data, expected_fc)`
+- [ ] Validate MBAP header and function code
+- [ ] Extract data bytes
+- [ ] Handle exception responses (minimal error output)
 
-### 5.3 Testing (COMPLETE)
-- [x] Test all CLI options against real PLC
-- [x] Test error conditions (wrong port, no connection, etc.)
-- [x] Verify Markdown output format
-- [x] Verify multi-format interpretation accuracy
+### 4.3 Data Conversion
+- [ ] `bytes_to_int16(b1, b2)` - Little-endian signed 16-bit
+- [ ] `bytes_to_int32(b1, b2, b3, b4)` - Little-endian signed 32-bit
+- [ ] `format_ip(b1, b2, b3, b4)` - Format as dotted decimal
+- [ ] `format_mac(b1, b2, b3, b4, b5, b6)` - Format as colon-separated hex
 
-**Exit Criteria**: Ready for student use - ACHIEVED
+**Exit Criteria**: Helper functions tested with known byte sequences.
+
+---
+
+## Phase 5: Modbus Device Info
+
+### 5.1 SD Register Reads
+- [ ] Read SD5-SD8 (0xF004-F007) - Firmware Version
+- [ ] Read SD80-SD83 (0xF04F-F052) - IP Address
+- [ ] Read SD84-SD87 (0xF053-F056) - Subnet Mask
+- [ ] Read SD88-SD91 (0xF057-F05A) - Gateway
+- [ ] Read SD188-SD193 (0xF0BB-F0C0) - MAC Address
+- [ ] Read SD101-SD102 (0xF064-F065) - EIP Status
+
+### 5.2 Data Assembly
+- [ ] Combine firmware version bytes into version string
+- [ ] Format network addresses
+- [ ] Interpret EIP status registers
+
+### 5.3 Output Table
+- [ ] Add "Modbus Device Information" section
+- [ ] Populate Firmware, IP, Subnet, Gateway, MAC, EIP Status
+
+**Exit Criteria**: Modbus device info section populated correctly.
+
+---
+
+## Phase 6: Modbus I/O Query
+
+### 6.1 Coil Reading
+- [ ] Read X inputs (FC 02, start 0x0000, count from arg)
+- [ ] Read Y outputs (FC 01, start 0x2000, count from arg)
+- [ ] Format as space-separated binary values
+
+### 6.2 Register Reading
+- [ ] Read DS registers (FC 03, start 0x0000, count from arg)
+- [ ] Read DD registers (FC 03, start 0x4000, count*2 words)
+- [ ] Convert DS to INT16, DD to INT32 (little-endian)
+- [ ] Format as comma-separated values
+
+### 6.3 Output Table
+- [ ] Add Inputs line: "Inputs (X001-X0nn): 0 0 1 ..."
+- [ ] Add Outputs line: "Outputs (Y001-Y0nn): 0 0 0 ..."
+- [ ] Add DS line: "DS Registers (DS1-DSnn): 0, 100, ..."
+- [ ] Add DD line: "DD Registers (DD1-DDnn): 0, 0, ..."
+
+**Exit Criteria**: I/O data displayed correctly with configurable counts.
+
+---
+
+## Phase 7: Output Formatting
+
+### 7.1 Combined Output
+- [ ] Merge ENIP and Modbus results into single output table
+- [ ] Handle cases where one protocol fails/skipped
+- [ ] Ensure consistent formatting
+
+### 7.2 Protocol Selection Logic
+- [ ] Implement modbus-only flag
+- [ ] Implement enip-only flag
+- [ ] Handle port-based auto-detection
+
+### 7.3 Edge Cases
+- [ ] No response from device
+- [ ] Partial data (some reads fail)
+- [ ] Timeout handling
+
+**Exit Criteria**: Clean output for all protocol combinations.
+
+---
+
+## Phase 8: Testing and Documentation
+
+### 8.1 Testing
+- [ ] Test against CLICK PLUS C2-03CPU-2
+- [ ] Verify Modbus data accuracy
+- [ ] Verify ENIP data accuracy
+- [ ] Test all script arguments
+- [ ] Test TCP and UDP ENIP
+
+### 8.2 Documentation
+- [ ] Update README.md with NSE section
+- [ ] Update USAGE.md with NSE usage examples
+- [ ] Add inline comments to script
+- [ ] Document known limitations
+
+**Exit Criteria**: Script ready for use, documentation complete.
+
+---
+
+## Script Arguments Reference
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `click-plc-info.modbus-only` | boolean | false | Skip ENIP, scan Modbus only |
+| `click-plc-info.enip-only` | boolean | false | Skip Modbus, scan ENIP only |
+| `click-plc-info.unit-id` | integer | 0 | Modbus Unit ID |
+| `click-plc-info.coil-count` | integer | 10 | Number of X/Y coils to read |
+| `click-plc-info.reg-count` | integer | 10 | Number of DS/DD registers to read |
+| `click-plc-info.udp` | boolean | false | Use UDP for ENIP (default TCP) |
+
+---
+
+## Modbus Address Reference
+
+### Device Information (FC 04 - Input Registers)
+
+| Data | SD Address | Modbus HEX | Words |
+|------|------------|------------|-------|
+| Firmware Version | SD5-SD8 | 0xF004-F007 | 4 |
+| IP Address | SD80-SD83 | 0xF04F-F052 | 4 |
+| Subnet Mask | SD84-SD87 | 0xF053-F056 | 4 |
+| Gateway | SD88-SD91 | 0xF057-F05A | 4 |
+| MAC Address | SD188-SD193 | 0xF0BB-F0C0 | 6 |
+| EIP Status | SD101-SD102 | 0xF064-F065 | 2 |
+
+### I/O Data
+
+| Data | Type | FC | Start Address |
+|------|------|-----|---------------|
+| Inputs (X) | Discrete Inputs | 02 | 0x0000 |
+| Outputs (Y) | Coils | 01 | 0x2000 |
+| DS Registers | Holding Registers | 03 | 0x0000 |
+| DD Registers | Holding Registers | 03 | 0x4000 |
 
 ---
 
 ## Dependencies
 
-| Dependency | Version | Purpose | Required |
-|------------|---------|---------|----------|
-| Python | 3.11+ | Runtime | Yes |
-| pycomm3 | >=1.0.0 | EtherNet/IP CIP (primary) | Yes |
-
-**Note**: pycomm3 replaced CPPPO as primary library. CPPPO's read operations return
-"Service not supported" for CLICK PLCs. pycomm3 CIPDriver.generic_message() works.
-This scanner uses EtherNet/IP CIP only - no Modbus dependency.
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| Nmap | 7.x+ | NSE runtime |
+| Lua | 5.3+ | Script language (bundled with Nmap) |
 
 ---
 
@@ -216,13 +284,10 @@ This scanner uses EtherNet/IP CIP only - no Modbus dependency.
 
 | Risk | Impact | Status | Mitigation |
 |------|--------|--------|------------|
-| CPPPO API complexity | Medium | RESOLVED | Switched to pycomm3 which has simpler API |
-| CPPPO incompatible with CLICK | High | RESOLVED | pycomm3 CIPDriver works for all CIP operations |
-| Unknown assembly size | Medium | MITIGATED | Tested: returns actual configured size (432 bytes) |
-| CIP path syntax issues | Medium | RESOLVED | pycomm3 uses class_code/instance/attribute params |
-| CLICK as simple device | Medium | RESOLVED | No special flags needed with pycomm3 |
-| Assembly not configured | High | RESOLVED | Tested: Returns "Object does not exist" error, script handles gracefully |
-| CIP error codes | Low | OPEN | Reference CLICK error code documentation |
+| Lua binary parsing complexity | Medium | OPEN | Use string.pack/unpack (Lua 5.3+) |
+| CLICK Unit ID requirements | Low | MITIGATED | Default to 0, allow arg override |
+| UDP ENIP firewall issues | Low | OPEN | TCP is default, UDP optional |
+| Modbus exception handling | Low | MITIGATED | Minimal error output, skip failed reads |
 
 ---
 
@@ -231,10 +296,9 @@ This scanner uses EtherNet/IP CIP only - no Modbus dependency.
 | Item | Value |
 |------|-------|
 | PLC Model | CLICK PLUS C2-03CPU-2 |
-| EtherNet/IP Port | 44818 (default) |
-| Connection 1 Config | DS1-DS72 (144 bytes) + DD3-DD74 (288 bytes) |
-| Total Assembly Size | 432 bytes |
-| pycomm3 | Installed and working |
+| Modbus Port | 502 |
+| EtherNet/IP Port | 44818 |
+| Nmap Version | 7.x+ |
 
 ---
 
@@ -242,21 +306,7 @@ This scanner uses EtherNet/IP CIP only - no Modbus dependency.
 
 | Milestone | Phase | Description |
 |-----------|-------|-------------|
-| M1 | 1 Complete | Script connects to CLICK via ENIP |
-| M2 | 2 Complete | --info and --network return data |
-| M3 | 3 Complete | Default scan shows multi-format data |
-| M4 | 4 Complete | Full CLI (--full) and Markdown output |
-| M5 | 5 Complete | Ready for release |
-
----
-
-## Notes
-
-- Keep implementation simple - single script preferred
-- Test against real hardware (CLICK PLUS C2-03CPU-2) when available
-- Prioritize reliability over features
-- Student-friendly error messages
-- Multi-format interpretation is key for unknown configurations
-- No CSV output for ENIP (data format not suitable)
-- Console output must be readable in terminal
-- Markdown output for reporting and documentation
+| M1 | 1 Complete | Script loads, args parse |
+| M2 | 3 Complete | ENIP works (TCP and UDP) |
+| M3 | 6 Complete | Modbus works (device info + I/O) |
+| M4 | 8 Complete | Tested and documented |
