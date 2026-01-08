@@ -954,3 +954,419 @@ nmap --script click-plc-info --script-args='click-plc-info.enip-only=true,click-
 ```bash
 nmap --script click-plc-info --script-args='click-plc-info.unit-id=1,click-plc-info.coil-count=20,click-plc-info.reg-count=20' -p 502 192.168.0.10
 ```
+
+---
+
+# Part 4: Metasploit Modules
+
+## Overview
+
+Three custom Metasploit Framework auxiliary scanner modules for SCADA/ICS security assessments. All modules are **READ-ONLY** and designed to be installed in the user's local Metasploit modules directory.
+
+### Module Summary
+
+| Module | Protocol | Port | Purpose |
+|--------|----------|------|---------|
+| modbus_click.rb | Modbus TCP | 502 | CLICK PLC address type scanning |
+| enip_scanner.rb | EtherNet/IP | 44818 | Device identity and network enumeration |
+| enip_bruteforce.rb | EtherNet/IP CIP | 44818 | CIP class/instance/attribute enumeration |
+
+### Installation Location
+
+```
+~/.msf4/modules/auxiliary/scanner/scada/
+```
+
+---
+
+## Module 1: modbus_click.rb
+
+### Purpose
+
+Read CLICK PLC-specific address types with proper Modbus function codes and data type handling.
+
+### Module Structure
+
+```
+modbus_click.rb
+    |
+    +-- Class Definition
+    |       - MetasploitModule < Msf::Auxiliary
+    |       - Mixins: Remote::Tcp, Report, Scanner
+    |
+    +-- Module Metadata
+    |       - Name, Description, Author, License
+    |       - Actions array (read operations)
+    |       - Options (RPORT, UNIT_ID, etc.)
+    |
+    +-- CLICK Address Mapping
+    |       - CLICK_ADDRESSES constant
+    |       - Function code mappings
+    |       - Data type definitions
+    |
+    +-- Modbus Functions
+    |       - make_read_payload()
+    |       - send_modbus_frame()
+    |       - read_coils()
+    |       - read_registers()
+    |
+    +-- Data Conversion
+    |       - convert_int16()
+    |       - convert_int32()
+    |       - convert_float()
+    |
+    +-- Actions
+    |       - READ_INPUTS, READ_OUTPUTS
+    |       - READ_DS, READ_DD, READ_DF
+    |       - READ_DEVICE_INFO
+    |       - SCAN_COMMON
+    |
+    +-- run_host(ip)
+            - Main execution per target
+            - Database reporting
+```
+
+### CLICK Address Types
+
+| Action | Type | Start Address | FC | Data Format |
+|--------|------|---------------|-----|-------------|
+| READ_INPUTS | X0-X8 | 0x0000-0x0100 | 02 | Bits |
+| READ_OUTPUTS | Y0-Y8 | 0x2000-0x2100 | 01 | Bits |
+| READ_CONTROL_RELAYS | C | 0x4000 | 01 | Bits |
+| READ_DS | DS | 0x0000 | 03 | INT16 |
+| READ_DD | DD | 0x4000 | 03 | INT32 (2 words) |
+| READ_DF | DF | 0x7000 | 03 | FLOAT (2 words) |
+| READ_DEVICE_INFO | SD | 0xF000+ | 03/04 | Mixed |
+
+### Device Information Registers
+
+| Data | SD Address | Modbus HEX | FC |
+|------|------------|------------|-----|
+| Firmware Version | SD5-SD8 | 0xF004-0xF007 | 04 |
+| IP Address | SD80-SD83 | 0xF04F-0xF052 | 04 |
+| Subnet Mask | SD84-SD87 | 0xF053-0xF056 | 04 |
+| Gateway | SD88-SD91 | 0xF057-0xF05A | 04 |
+| MAC Address | SD188-SD193 | 0xF0BB-0xF0C0 | 04 |
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| RPORT | Integer | 502 | Modbus TCP port |
+| UNIT_ID | Integer | 0 | Modbus Unit ID |
+| ADDRESS_START | Integer | (varies) | Start address override |
+| ADDRESS_COUNT | Integer | (varies) | Count override |
+| TIMEOUT | Integer | 2 | Socket timeout seconds |
+
+---
+
+## Module 2: enip_scanner.rb
+
+### Purpose
+
+Generic EtherNet/IP device enumeration including identity and network configuration. Works with any ENIP device, not just CLICK PLCs.
+
+### Module Structure
+
+```
+enip_scanner.rb
+    |
+    +-- Class Definition
+    |       - MetasploitModule < Msf::Auxiliary
+    |       - Mixins: Remote::Tcp, Report, Scanner
+    |
+    +-- Module Metadata
+    |       - Name, Description, Author, License
+    |       - Actions array
+    |       - Options (RPORT, TIMEOUT)
+    |
+    +-- Lookup Tables
+    |       - VENDOR_IDS (1513+ entries from Nmap)
+    |       - DEVICE_TYPES (from Nmap)
+    |
+    +-- ENIP Functions
+    |       - build_list_identity_request()
+    |       - parse_list_identity_response()
+    |       - register_session()
+    |       - unregister_session()
+    |
+    +-- CIP Functions
+    |       - build_cip_request()
+    |       - send_cip_message()
+    |       - get_attribute_single()
+    |
+    +-- Actions
+    |       - LIST_IDENTITY
+    |       - GET_NETWORK_INFO
+    |       - FULL_SCAN
+    |
+    +-- run_host(ip)
+            - Main execution per target
+            - Database reporting
+```
+
+### ENIP Commands Used
+
+| Command | Code | Description |
+|---------|------|-------------|
+| List Identity | 0x0063 | Request device identity (no session) |
+| Register Session | 0x0065 | Establish CIP session |
+| Unregister Session | 0x0066 | Close CIP session |
+| Send RR Data | 0x006F | Send CIP explicit message |
+
+### CIP Objects Accessed
+
+| Class | Name | Instance | Attributes |
+|-------|------|----------|------------|
+| 0x01 | Identity | 1 | 1-7 (Vendor, Type, Name, etc.) |
+| 0xF5 | TCP/IP Interface | 1 | 1-6 (IP, Subnet, Gateway, Hostname) |
+| 0xF6 | Ethernet Link | 1 | 1-3 (Speed, Flags, MAC) |
+
+### Vendor ID Table
+
+Source: Nmap enip-info.nse (1513+ entries)
+
+Key vendors included:
+- 0: Reserved
+- 1: Rockwell Automation/Allen-Bradley
+- 47: Omron
+- 82: Mitsubishi Electric
+- 145: Siemens
+- 482: Koyo Electronics (AutomationDirect)
+- 660: Automationdirect.com
+
+### Identity Response Parsing
+
+| Offset | Field | Size | Description |
+|--------|-------|------|-------------|
+| 49-50 | Vendor ID | 2 | Little-endian UINT16 |
+| 51-52 | Device Type | 2 | Little-endian UINT16 |
+| 53-54 | Product Code | 2 | Little-endian UINT16 |
+| 55 | Revision Major | 1 | UINT8 |
+| 56 | Revision Minor | 1 | UINT8 |
+| 57-58 | Status | 2 | Little-endian UINT16 |
+| 59-62 | Serial Number | 4 | Little-endian UINT32 |
+| 63 | Name Length | 1 | UINT8 |
+| 64+ | Product Name | Var | ASCII string |
+
+---
+
+## Module 3: enip_bruteforce.rb
+
+### Purpose
+
+Enumerate CIP classes, instances, and attributes via brute force or known-object scanning. Includes safety warnings for lab-only use.
+
+### Safety Warning
+
+```
+WARNING: This module performs CIP class/instance/attribute enumeration
+which may impact PLC operations. USE ONLY IN LAB ENVIRONMENTS.
+
+Do NOT use this module against production systems. Rapid CIP requests
+can overwhelm some PLCs, causing communication failures, watchdog
+timeouts, or unexpected behavior.
+```
+
+### Module Structure
+
+```
+enip_bruteforce.rb
+    |
+    +-- Class Definition
+    |       - MetasploitModule < Msf::Auxiliary
+    |       - Mixins: Remote::Tcp, Report, Scanner
+    |
+    +-- Module Metadata
+    |       - Name, Description (with WARNING)
+    |       - Actions array
+    |       - Options (CLASS/INSTANCE/ATTRIBUTE ranges, DELAY)
+    |
+    +-- Known Classes
+    |       - KNOWN_CLASSES constant
+    |       - Expected instances per class
+    |       - Expected attributes per class
+    |       - Attribute name mappings
+    |
+    +-- CIP Functions
+    |       - Session management (from enip_scanner)
+    |       - get_attribute_single()
+    |       - parse_cip_response()
+    |
+    +-- Enumeration Functions
+    |       - enumerate_classes()
+    |       - enumerate_instances()
+    |       - enumerate_attributes()
+    |       - known_objects_scan()
+    |
+    +-- Data Interpretation
+    |       - interpret_raw()
+    |       - interpret_uint16()
+    |       - interpret_uint32()
+    |       - interpret_string()
+    |
+    +-- Actions
+    |       - ENUMERATE_CLASSES
+    |       - ENUMERATE_INSTANCES
+    |       - ENUMERATE_ATTRIBUTES
+    |       - KNOWN_OBJECTS
+    |       - FULL_ENUMERATION
+    |
+    +-- run_host(ip)
+            - Runtime warning display
+            - Rate limiting
+            - Database reporting
+```
+
+### Known CIP Classes
+
+| Class | Name | Instances | Attributes | Description |
+|-------|------|-----------|------------|-------------|
+| 0x01 | Identity | 1 | 1-7 | Device identification |
+| 0x02 | Message Router | 1 | 1-2 | Message routing |
+| 0x04 | Assembly | 100-199 | 1-3 | I/O data assemblies |
+| 0x06 | Connection Manager | 1 | 1-3 | Connection management |
+| 0xF4 | Port | 1-4 | 1-7 | Network port info |
+| 0xF5 | TCP/IP Interface | 1 | 1-6 | Network configuration |
+| 0xF6 | Ethernet Link | 1-4 | 1-3 | Ethernet interface |
+
+### CIP Status Codes
+
+| Status | Meaning | Action |
+|--------|---------|--------|
+| 0x00 | Success | Parse and display data |
+| 0x05 | Path destination unknown | Class not supported |
+| 0x08 | Service not supported | Skip |
+| 0x14 | Attribute not supported | Attribute doesn't exist |
+| 0x16 | Object does not exist | Instance not supported |
+
+### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| RPORT | Integer | 44818 | EtherNet/IP port |
+| CLASS_START | Integer | 1 | Start of class range |
+| CLASS_END | Integer | 255 | End of class range |
+| INSTANCE_START | Integer | 0 | Start of instance range |
+| INSTANCE_END | Integer | 10 | End of instance range |
+| ATTRIBUTE_START | Integer | 1 | Start of attribute range |
+| ATTRIBUTE_END | Integer | 20 | End of attribute range |
+| TARGET_CLASS | Integer | (none) | Specific class to enumerate |
+| TARGET_INSTANCE | Integer | (none) | Specific instance to enumerate |
+| DATA_TYPE | String | RAW | Interpretation: RAW/UINT16/UINT32/STRING |
+| DELAY | Integer | 100 | Milliseconds between requests |
+| KNOWN_ONLY | Boolean | false | Only scan known classes |
+
+---
+
+## Database Reporting
+
+All modules use `report_note()` for database persistence, following the pattern from `modbus_banner_grabbing.rb`:
+
+### modbus_click.rb
+
+```ruby
+report_note(
+  host: ip,
+  proto: 'tcp',
+  port: rport,
+  sname: 'modbus',
+  type: "modbus.click.ds",
+  data: { address: "DS1", value: 100, raw: "0x0064" }
+)
+```
+
+### enip_scanner.rb
+
+```ruby
+report_note(
+  host: ip,
+  proto: 'tcp',
+  port: rport,
+  sname: 'enip',
+  type: "enip.identity.vendor",
+  data: { vendor_id: 482, vendor_name: "Koyo Electronics" }
+)
+```
+
+### enip_bruteforce.rb
+
+```ruby
+report_note(
+  host: ip,
+  proto: 'tcp',
+  port: rport,
+  sname: 'enip',
+  type: "enip.cip.object",
+  data: { class: 0x01, instance: 1, attribute: 1, value: "0x01e2" }
+)
+```
+
+---
+
+## Output Format
+
+All modules use MSF-standard output functions:
+
+| Function | Purpose | Example |
+|----------|---------|---------|
+| print_good() | Successful results | `[+] 192.168.1.10: DS1 = 100` |
+| print_status() | Progress/info | `[*] Sending READ_DS...` |
+| print_error() | Errors | `[-] Connection refused` |
+| print_warning() | Warnings | `[!] Lab use only!` |
+
+---
+
+## Dependencies
+
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| Metasploit Framework | 6.x+ | Module runtime |
+| Ruby | 2.7+ | Scripting language |
+
+---
+
+## Usage Examples
+
+### CLICK Modbus Scanner
+
+```
+msf6> use auxiliary/scanner/scada/modbus_click
+msf6 auxiliary(scanner/scada/modbus_click) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/modbus_click) > set ACTION READ_DEVICE_INFO
+msf6 auxiliary(scanner/scada/modbus_click) > run
+
+[*] 192.168.1.10:502 - Sending READ_DEVICE_INFO...
+[+] 192.168.1.10:502 - Firmware: 3.41
+[+] 192.168.1.10:502 - IP Address: 192.168.1.10
+[+] 192.168.1.10:502 - MAC Address: 00:D0:7C:1A:42:44
+```
+
+### ENIP Scanner
+
+```
+msf6> use auxiliary/scanner/scada/enip_scanner
+msf6 auxiliary(scanner/scada/enip_scanner) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/enip_scanner) > set ACTION FULL_SCAN
+msf6 auxiliary(scanner/scada/enip_scanner) > run
+
+[*] 192.168.1.10:44818 - ENIP List Identity
+[+] 192.168.1.10:44818 - Vendor: Koyo Electronics (482)
+[+] 192.168.1.10:44818 - Product Name: CLICK C2-03CPU-2
+[+] 192.168.1.10:44818 - Serial Number: 0x35bf2b44
+```
+
+### ENIP Brute Force
+
+```
+msf6> use auxiliary/scanner/scada/enip_bruteforce
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION KNOWN_OBJECTS
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+
+[!] 192.168.1.10:44818 - WARNING: Use only in lab environments!
+[*] 192.168.1.10:44818 - Scanning known CIP objects...
+[+] 192.168.1.10:44818 - Class 0x01 (Identity) Instance 1:
+[+]   Attribute 1 (Vendor ID): 482
+[+]   Attribute 7 (Product Name): CLICK C2-03CPU-2
+```

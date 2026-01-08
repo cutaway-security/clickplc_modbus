@@ -2,13 +2,23 @@
 
 Scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. Designed for ICS/OT cybersecurity students and assessment personnel conducting authorized testing.
 
-## Scripts
+## Scripts and Modules
+
+### Python and Nmap Scripts
 
 | Script | Protocol | Port | Purpose |
 |--------|----------|------|---------|
 | click_modbus_scanner.py | Modbus TCP | 502 | Read coils and registers |
 | click_enip_scanner.py | EtherNet/IP CIP | 44818 | Read device info and assembly data |
 | click-plc-info.nse | Modbus + ENIP | 502, 44818 | Nmap NSE script for combined scanning |
+
+### Metasploit Modules
+
+| Module | Protocol | Port | Purpose |
+|--------|----------|------|---------|
+| modbus_click.rb | Modbus TCP | 502 | CLICK PLC address type scanning |
+| enip_scanner.rb | EtherNet/IP | 44818 | Device identity and network enumeration |
+| enip_bruteforce.rb | EtherNet/IP CIP | 44818 | CIP class/instance/attribute enumeration |
 
 ## Requirements
 
@@ -19,6 +29,10 @@ Scan AutomationDirect CLICK PLCs via Modbus TCP and EtherNet/IP CIP protocols. D
 
 ### NSE Script
 - Nmap 7.80+ with Lua 5.3
+
+### Metasploit Modules
+- Metasploit Framework 6.x+
+- Ruby 2.7+
 
 ```bash
 pip install -r requirements.txt
@@ -152,6 +166,55 @@ PORT      STATE SERVICE
 |   Serial Number: 0x35bf2b44
 |   Revision: 1.1
 |_  Device IP: 192.168.0.10
+```
+
+---
+
+## Metasploit Modules
+
+Custom Metasploit Framework auxiliary modules for SCADA/ICS assessments. All modules are **READ-ONLY**.
+
+### Installation
+
+```bash
+# Create module directory
+mkdir -p ~/.msf4/modules/auxiliary/scanner/scada
+
+# Copy modules
+cp modbus_click.rb ~/.msf4/modules/auxiliary/scanner/scada/
+cp enip_scanner.rb ~/.msf4/modules/auxiliary/scanner/scada/
+cp enip_bruteforce.rb ~/.msf4/modules/auxiliary/scanner/scada/
+
+# Reload in msfconsole
+msf6> reload_all
+```
+
+### Quick Start
+
+```bash
+# CLICK Modbus Scanner - Read device info (firmware, IP, MAC)
+msf6> use auxiliary/scanner/scada/modbus_click
+msf6> set RHOSTS 192.168.0.10
+msf6> set ACTION READ_DEVICE_INFO
+msf6> run
+
+# ENIP Scanner - Full scan (identity + network config)
+msf6> use auxiliary/scanner/scada/enip_scanner
+msf6> set RHOSTS 192.168.0.10
+msf6> set ACTION FULL_SCAN
+msf6> run
+
+# ENIP Brute Force - Scan known CIP objects (LAB ONLY)
+msf6> use auxiliary/scanner/scada/enip_bruteforce
+msf6> set RHOSTS 192.168.0.10
+msf6> set ACTION KNOWN_OBJECTS
+msf6> run
+
+# ENIP Brute Force - Enumerate specific class attributes
+msf6> set ACTION ENUMERATE_ATTRIBUTES
+msf6> set TARGET_CLASS 1
+msf6> set TARGET_INSTANCE 1
+msf6> run
 ```
 
 ---

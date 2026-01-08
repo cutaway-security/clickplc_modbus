@@ -25,6 +25,13 @@
   - [NSE Output](#nse-output)
   - [NSE Examples](#nse-examples)
   - [NSE Troubleshooting](#nse-troubleshooting)
+- [Metasploit Modules](#metasploit-modules)
+  - [MSF Installation](#msf-installation)
+  - [CLICK Modbus Client](#click-modbus-client-modbus_clickrb)
+  - [ENIP Scanner](#enip-scanner-enip_scannerrb)
+  - [ENIP Brute Force](#enip-brute-force-enip_bruteforcerb)
+  - [MSF Database Reporting](#msf-database-reporting)
+  - [MSF Troubleshooting](#msf-troubleshooting)
 
 ---
 
@@ -881,3 +888,464 @@ If ENIP scan shows no results:
 - Verify EtherNet/IP is enabled on PLC
 - Try UDP transport: `--script-args='click-plc-info.udp=true'`
 - Check port 44818 is not blocked
+
+---
+
+# Metasploit Modules
+
+Three custom Metasploit Framework auxiliary scanner modules for SCADA/ICS security assessments. All modules are **READ-ONLY** - no write operations are performed.
+
+## MSF Installation
+
+### Prerequisites
+
+- Metasploit Framework 6.x+
+- Ruby 2.7+
+
+### Install Modules
+
+1. Create the custom module directory:
+
+```bash
+mkdir -p ~/.msf4/modules/auxiliary/scanner/scada
+```
+
+2. Copy the module files:
+
+```bash
+cp modbus_click.rb ~/.msf4/modules/auxiliary/scanner/scada/
+cp enip_scanner.rb ~/.msf4/modules/auxiliary/scanner/scada/
+cp enip_bruteforce.rb ~/.msf4/modules/auxiliary/scanner/scada/
+```
+
+3. Reload modules in msfconsole:
+
+```
+msf6> reload_all
+```
+
+4. Verify modules are loaded:
+
+```
+msf6> search modbus_click
+msf6> search enip_scanner
+msf6> search enip_bruteforce
+```
+
+---
+
+## CLICK Modbus Client (modbus_click.rb)
+
+### Purpose
+
+Read CLICK PLC-specific address types with proper Modbus function codes and data type handling.
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| READ_INPUTS | Read X0-X8 discrete inputs (FC 02) |
+| READ_OUTPUTS | Read Y0-Y8 coil outputs (FC 01) |
+| READ_CONTROL_RELAYS | Read C control relays (FC 01) |
+| READ_DS | Read DS registers as INT16 (FC 03) |
+| READ_DD | Read DD registers as INT32 (FC 03) |
+| READ_DF | Read DF registers as FLOAT (FC 03) |
+| READ_DEVICE_INFO | Read SD system registers (firmware, IP, MAC) |
+| SCAN_COMMON | Scan common address types |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| RHOSTS | (required) | Target IP address(es) |
+| RPORT | 502 | Modbus TCP port |
+| UNIT_ID | 0 | Modbus Unit ID |
+| ADDRESS_START | (varies) | Start address override |
+| ADDRESS_COUNT | (varies) | Count override |
+| TIMEOUT | 2 | Socket timeout (seconds) |
+
+### Usage Examples
+
+```
+# Load module
+msf6> use auxiliary/scanner/scada/modbus_click
+
+# Show options
+msf6 auxiliary(scanner/scada/modbus_click) > show options
+
+# Show actions
+msf6 auxiliary(scanner/scada/modbus_click) > show actions
+
+# Read device information
+msf6 auxiliary(scanner/scada/modbus_click) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/modbus_click) > set ACTION READ_DEVICE_INFO
+msf6 auxiliary(scanner/scada/modbus_click) > run
+
+# Read DS registers
+msf6 auxiliary(scanner/scada/modbus_click) > set ACTION READ_DS
+msf6 auxiliary(scanner/scada/modbus_click) > set ADDRESS_COUNT 20
+msf6 auxiliary(scanner/scada/modbus_click) > run
+
+# Read float registers
+msf6 auxiliary(scanner/scada/modbus_click) > set ACTION READ_DF
+msf6 auxiliary(scanner/scada/modbus_click) > run
+
+# Scan multiple hosts
+msf6 auxiliary(scanner/scada/modbus_click) > set RHOSTS 192.168.1.0/24
+msf6 auxiliary(scanner/scada/modbus_click) > set ACTION SCAN_COMMON
+msf6 auxiliary(scanner/scada/modbus_click) > run
+```
+
+### Example Output
+
+```
+[*] 192.168.1.10:502 - Sending READ_DEVICE_INFO...
+[+] 192.168.1.10:502 - Firmware Version: 3.41
+[+] 192.168.1.10:502 - IP Address: 192.168.1.10
+[+] 192.168.1.10:502 - Subnet Mask: 255.255.255.0
+[+] 192.168.1.10:502 - Gateway: 192.168.1.1
+[+] 192.168.1.10:502 - MAC Address: 00:D0:7C:1A:42:44
+[*] 192.168.1.10:502 - Scanned 1 of 1 hosts (100% complete)
+```
+
+---
+
+## ENIP Scanner (enip_scanner.rb)
+
+### Purpose
+
+Generic EtherNet/IP device enumeration including identity and network configuration. Works with any ENIP device, not just CLICK PLCs.
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| LIST_IDENTITY | Request device identity via ENIP command 0x0063 (no session required) |
+| NETWORK_INFO | Read network config via CIP explicit messaging (requires session) |
+| FULL_SCAN | Combined identity and network scan |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| RHOSTS | (required) | Target IP address(es) |
+| RPORT | 44818 | EtherNet/IP port |
+| TIMEOUT | 5 | Socket timeout (seconds) |
+
+### Usage Examples
+
+```
+# Load module
+msf6> use auxiliary/scanner/scada/enip_scanner
+
+# List identity (no session required)
+msf6 auxiliary(scanner/scada/enip_scanner) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/enip_scanner) > set ACTION LIST_IDENTITY
+msf6 auxiliary(scanner/scada/enip_scanner) > run
+
+# Get network configuration (IP, subnet, gateway, MAC)
+msf6 auxiliary(scanner/scada/enip_scanner) > set ACTION NETWORK_INFO
+msf6 auxiliary(scanner/scada/enip_scanner) > run
+
+# Full scan (identity + network)
+msf6 auxiliary(scanner/scada/enip_scanner) > set ACTION FULL_SCAN
+msf6 auxiliary(scanner/scada/enip_scanner) > run
+
+# Scan subnet for ENIP devices
+msf6 auxiliary(scanner/scada/enip_scanner) > set RHOSTS 192.168.1.0/24
+msf6 auxiliary(scanner/scada/enip_scanner) > set ACTION LIST_IDENTITY
+msf6 auxiliary(scanner/scada/enip_scanner) > run
+```
+
+### Example Output
+
+```
+[*] 192.168.1.10:44818 - ENIP List Identity
+[+] 192.168.1.10:44818 - Vendor: Koyo Electronics (482)
+[+] 192.168.1.10:44818 - Device Type: Generic Device (keyable) (43)
+[+] 192.168.1.10:44818 - Product Name: CLICK C2-03CPU-2
+[+] 192.168.1.10:44818 - Serial Number: 0x35bf2b44
+[+] 192.168.1.10:44818 - Product Code: 634
+[+] 192.168.1.10:44818 - Revision: 1.1
+[+] 192.168.1.10:44818 - Status: 0x0030
+[+] 192.168.1.10:44818 - Device IP: 192.168.1.10
+
+[*] 192.168.1.10:44818 - Network Information
+[+] 192.168.1.10:44818 - IP Address: 192.168.1.10
+[+] 192.168.1.10:44818 - Subnet Mask: 255.255.255.0
+[+] 192.168.1.10:44818 - Gateway: 192.168.1.1
+[+] 192.168.1.10:44818 - MAC Address: 00:D0:7C:1A:42:44
+```
+
+---
+
+## ENIP Brute Force (enip_bruteforce.rb)
+
+### Purpose
+
+Enumerate CIP classes, instances, and attributes via brute force or known-object scanning.
+
+### Safety Warning
+
+```
+WARNING: This module performs CIP class/instance/attribute enumeration
+which may impact PLC operations. USE ONLY IN LAB ENVIRONMENTS.
+
+Do NOT use this module against production systems. Rapid CIP requests
+can overwhelm some PLCs, causing communication failures, watchdog
+timeouts, or unexpected behavior.
+```
+
+### Actions
+
+| Action | Description |
+|--------|-------------|
+| ENUMERATE_CLASSES | Scan class range for supported classes |
+| ENUMERATE_INSTANCES | Scan instance range for specific class |
+| ENUMERATE_ATTRIBUTES | Scan attribute range for class/instance |
+| KNOWN_OBJECTS | Scan only documented common classes |
+| FULL_ENUMERATION | Comprehensive brute force scan |
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| RHOSTS | (required) | Target IP address(es) |
+| RPORT | 44818 | EtherNet/IP port |
+| CLASS_START | 1 | Start of class range |
+| CLASS_END | 255 | End of class range |
+| INSTANCE_START | 0 | Start of instance range |
+| INSTANCE_END | 10 | End of instance range |
+| ATTRIBUTE_START | 1 | Start of attribute range |
+| ATTRIBUTE_END | 20 | End of attribute range |
+| TARGET_CLASS | (none) | Specific class to enumerate |
+| TARGET_INSTANCE | (none) | Specific instance to enumerate |
+| DATA_TYPE | RAW | Data interpretation: RAW, UINT16, UINT32, STRING |
+| DELAY | 100 | Milliseconds between requests |
+| KNOWN_ONLY | false | Only scan known classes |
+
+### Known CIP Classes
+
+The module includes a table of documented CIP classes:
+
+| Class | Name | Description |
+|-------|------|-------------|
+| 0x01 | Identity | Device identification |
+| 0x02 | Message Router | Message routing |
+| 0x04 | Assembly | I/O data assemblies |
+| 0x06 | Connection Manager | Connection management |
+| 0xF4 | Port | Network port info |
+| 0xF5 | TCP/IP Interface | Network configuration |
+| 0xF6 | Ethernet Link | Ethernet interface |
+
+### Usage Examples
+
+#### Basic: Scan Known Objects (Safest)
+
+```
+msf6> use auxiliary/scanner/scada/enip_bruteforce
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set RHOSTS 192.168.1.10
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION KNOWN_OBJECTS
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+```
+
+This scans only documented CIP classes (Identity, Assembly, TCP/IP, Ethernet Link, etc.) and is the safest option for initial enumeration.
+
+#### Class Enumeration: Find Supported Classes
+
+```
+# Scan classes 1-50 to find what the device supports
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION ENUMERATE_CLASSES
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_START 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_END 50
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+
+# Scan higher class range (vendor-specific objects often 0x64+)
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_START 100
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_END 200
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+```
+
+#### Instance Enumeration: Find Instances of a Class
+
+```
+# Find all instances of Assembly Object (class 0x04)
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION ENUMERATE_INSTANCES
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_CLASS 4
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set INSTANCE_START 100
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set INSTANCE_END 110
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+
+# Find instances of Ethernet Link Object (class 0xF6)
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_CLASS 246
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set INSTANCE_START 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set INSTANCE_END 10
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+```
+
+#### Attribute Enumeration: Read All Attributes of an Object
+
+```
+# Read all attributes of Identity Object (class 1, instance 1)
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION ENUMERATE_ATTRIBUTES
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_CLASS 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_INSTANCE 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ATTRIBUTE_START 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ATTRIBUTE_END 10
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+
+# Read attributes of TCP/IP Interface Object (class 0xF5)
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_CLASS 245
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set TARGET_INSTANCE 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ATTRIBUTE_START 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ATTRIBUTE_END 20
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+```
+
+#### Full Enumeration (Lab Only - Slow)
+
+```
+# Comprehensive scan - use increased delay for stability
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set ACTION FULL_ENUMERATION
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_START 1
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set CLASS_END 10
+msf6 auxiliary(scanner/scada/enip_bruteforce) > set DELAY 200
+msf6 auxiliary(scanner/scada/enip_bruteforce) > run
+```
+
+#### Common CIP Class Reference
+
+| Decimal | Hex | Class Name |
+|---------|-----|------------|
+| 1 | 0x01 | Identity Object |
+| 2 | 0x02 | Message Router |
+| 4 | 0x04 | Assembly Object |
+| 6 | 0x06 | Connection Manager |
+| 244 | 0xF4 | Port Object |
+| 245 | 0xF5 | TCP/IP Interface |
+| 246 | 0xF6 | Ethernet Link |
+
+### Example Output
+
+```
+[!] 192.168.1.10:44818 - WARNING: Use only in lab environments!
+[*] 192.168.1.10:44818 - Scanning known CIP objects...
+
+[+] 192.168.1.10:44818 - Class 0x01 (Identity) Instance 1:
+[+]   Attribute 1 (Vendor ID): 482 (0x01e2)
+[+]   Attribute 2 (Device Type): 43 (0x002b)
+[+]   Attribute 3 (Product Code): 634 (0x027a)
+[+]   Attribute 4 (Revision): 1.1
+[+]   Attribute 5 (Status): 0x0030
+[+]   Attribute 6 (Serial Number): 0x35bf2b44
+[+]   Attribute 7 (Product Name): CLICK C2-03CPU-2
+
+[*] 192.168.1.10:44818 - Class 0x04 (Assembly) Instance 100: Not supported
+[*] 192.168.1.10:44818 - Class 0x04 (Assembly) Instance 101: Supported
+[+]   Attribute 3 (Data): 64 bytes
+
+[+] 192.168.1.10:44818 - Class 0xF5 (TCP/IP Interface) Instance 1:
+[+]   Attribute 5 (Interface Config): 192.168.1.10/255.255.255.0/192.168.1.1
+```
+
+---
+
+## MSF Database Reporting
+
+All modules use `report_note()` for database persistence. Results are stored in the Metasploit database and can be queried later.
+
+### Viewing Results
+
+```
+# View all notes for a host
+msf6> notes -a 192.168.1.10
+
+# View specific note types
+msf6> notes -t modbus.click.ds
+msf6> notes -t enip.identity.vendor
+msf6> notes -t enip.cip.object
+
+# Export to file
+msf6> notes -o /tmp/plc_scan_results.txt
+```
+
+### Note Types
+
+| Module | Note Type | Description |
+|--------|-----------|-------------|
+| modbus_click | modbus.click.ds | DS register values |
+| modbus_click | modbus.click.dd | DD register values |
+| modbus_click | modbus.click.device_info | Firmware, IP, MAC |
+| enip_scanner | enip.identity.vendor | Vendor ID and name |
+| enip_scanner | enip.identity.product_name | Product name string |
+| enip_scanner | enip.network.ip | IP configuration |
+| enip_bruteforce | enip.cip.object | Discovered CIP objects |
+
+---
+
+## MSF Troubleshooting
+
+### Module Not Found
+
+```
+[-] Failed to load module: auxiliary/scanner/scada/modbus_click
+```
+
+**Solutions:**
+- Verify module file exists in `~/.msf4/modules/auxiliary/scanner/scada/`
+- Check file permissions: `chmod 644 modbus_click.rb`
+- Run `reload_all` in msfconsole
+- Check for Ruby syntax errors: `ruby -c modbus_click.rb`
+
+### Connection Timeout
+
+```
+[-] 192.168.1.10:502 - Connection timeout
+```
+
+**Solutions:**
+- Verify network connectivity: `ping 192.168.1.10`
+- Check that protocol port is open: `nmap -p 502 192.168.1.10`
+- Increase timeout: `set TIMEOUT 10`
+
+### Modbus Exception
+
+```
+[-] 192.168.1.10:502 - Modbus exception 2 (Illegal Data Address)
+```
+
+**Solutions:**
+- The address type may not exist on this PLC model
+- Try a different action or address range
+- Check CLICK PLC configuration
+
+### CIP Object Does Not Exist
+
+```
+[*] Class 0x04 Instance 100: Not supported
+```
+
+This is informational, not an error. The device doesn't implement this CIP object. The brute force module logs both supported and unsupported objects for enumeration purposes.
+
+### Session Registration Failed
+
+```
+[-] 192.168.1.10:44818 - Failed to register CIP session
+```
+
+**Solutions:**
+- Verify EtherNet/IP is enabled on the device
+- Check for maximum connection limits on PLC
+- Try LIST_IDENTITY action (doesn't require session)
+- Increase timeout value
+
+### Database Not Connected
+
+```
+[-] Database not connected
+```
+
+**Solutions:**
+- Start PostgreSQL: `sudo systemctl start postgresql`
+- Initialize database: `msfdb init`
+- Connect in msfconsole: `db_connect`

@@ -1312,6 +1312,420 @@ All three scanning tools are now complete:
 
 ---
 
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.1 modbus_click.rb)
+
+### Context
+Developing custom Metasploit Framework auxiliary scanner module for CLICK PLC Modbus scanning.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Read-only operations only | Safety in ICS environments |
+| CLICK-specific address mappings | X0, Y0, C, DS, DD, DF, SD address types |
+| Little-endian word order for 32-bit | Matches CLICK PLC behavior (confirmed in Python scanner) |
+| Actions-based design | READ_INPUTS, READ_OUTPUTS, READ_DEVICE_INFO, etc. |
+| Database reporting with report_note() | Consistent with MSF modbus_banner_grabbing.rb pattern |
+
+### Issues Encountered and Resolved
+
+| Issue | Resolution |
+|-------|------------|
+| Firmware version displayed as 41.3 instead of 3.41 | SD5=minor, SD6=major; swapped in format_firmware_from_registers() |
+| FLOAT conversion byte order concern | Verified Ruby pack('L').unpack('F') works (symmetric native byte order), but updated to explicit big-endian pack('nn').unpack('g') for clarity and consistency with Python |
+
+### Technical Notes
+
+**CLICK Address Type Mappings:**
+```ruby
+CLICK_ADDRESSES = {
+  'X0' => { fc: 2, start: 0x0000, count: 36, type: :bool },
+  'Y0' => { fc: 1, start: 0x2000, count: 36, type: :bool },
+  'DS' => { fc: 3, start: 0x0000, count: 100, type: :int16 },
+  'DD' => { fc: 3, start: 0x4000, count: 50, type: :int32 },
+  'DF' => { fc: 3, start: 0x6000, count: 50, type: :float },
+  # ... etc
+}
+```
+
+**SD Device Info Registers:**
+- SD5-SD6 (0xF004): Firmware version (minor.major)
+- SD80-SD83 (0xF04F): IP Address
+- SD84-SD87 (0xF053): Subnet Mask
+- SD88-SD91 (0xF057): Gateway
+- SD188-SD193 (0xF0BB): MAC Address
+
+### Lessons Learned
+
+1. **Byte order documentation is critical**
+   - CLICK uses little-endian word order for 32-bit values
+   - Firmware version bytes are swapped (minor first, then major)
+   - Document in module description for troubleshooting
+
+2. **MSF module patterns from existing SCADA modules**
+   - modbus_banner_grabbing.rb for database reporting
+   - modbusclient.rb for Modbus frame building
+   - Use Actions array for multiple operations
+
+3. **Test with real hardware early**
+   - Firmware version issue only discovered during testing
+   - Compare output with Python scanner for validation
+
+---
+
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.2 enip_scanner.rb)
+
+### Context
+Developing generic EtherNet/IP scanner module for device identity enumeration.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Generic scanner (not CLICK-specific) | Works with any ENIP device |
+| Vendor ID table from Nmap enip-info.nse | 1500+ vendors, authoritative source |
+| TCP and UDP transport support | UDP faster for discovery |
+| List Identity command (0x0063) | No session required, widely supported |
+| Device type lookup table | Meaningful device categorization |
+
+### Implementation Details
+
+**ENIP List Identity Packet (24 bytes):**
+```ruby
+def build_list_identity_request
+  # Command (2) + Length (2) + Session (4) + Status (4) + Context (8) + Options (4)
+  header = [0x0063, 0, 0, 0].pack('vvVV')
+  header += "\x00" * 8  # Sender Context
+  header += [0].pack('V')  # Options
+  header
+end
+```
+
+**Identity Response Parsing:**
+- CPF Item Type 0x000C = Identity Item
+- Vendor ID at offset 18 (little-endian)
+- Device Type at offset 20
+- Product Name at offset 33 (length-prefixed string)
+- Device IP from socket address at offset 6
+
+### Technical Notes
+
+**Vendor ID Table Size:**
+- 1500+ vendors imported from Nmap
+- Includes Koyo Electronics (482) = AutomationDirect
+- Fallback: "Unknown Vendor (ID)"
+
+**Device Type Table:**
+- 40+ device types from ODVA specification
+- Type 14 = PLC, Type 43 = Generic Device (CLICK uses 43)
+- Fallback: "Unknown Device Type (ID)"
+
+### Lessons Learned
+
+1. **Nmap scripts are authoritative source for ICS protocol data**
+   - enip-info.nse has most comprehensive vendor list
+   - Device type table from Wireshark dissector
+
+2. **ENIP List Identity is session-less**
+   - No Register Session required
+   - Same packet works for TCP and UDP
+   - Simplest ENIP operation for device discovery
+
+3. **Socket address in response contains device IP**
+   - Useful for devices behind NAT
+   - sin_addr at offset 6 of identity item
+
+---
+
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.3 enip_bruteforce.rb)
+
+### Context
+Developing CIP object enumeration module for discovering supported classes, instances, and attributes on EtherNet/IP devices.
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Prominent safety warning | Module can impact device performance |
+| KNOWN_OBJECTS as default action | Safest option, only scans documented classes |
+| Configurable rate limiting | DELAY option (default 100ms) prevents overload |
+| CIP session management | Required for Send RR Data command |
+| 40+ CIP status codes | Comprehensive error handling |
+
+### Implementation Details
+
+**CIP Session Management:**
+```ruby
+def register_session
+  # Register Session: command 0x0065, protocol version 1
+  data = [1, 0].pack('vv')
+  packet = build_enip_header(ENIP_CMD_REGISTER_SESSION, data.length, 0) + data
+  # Parse session handle from response
+end
+```
+
+**CIP Path Building:**
+```ruby
+def build_cip_path(class_id, instance_id, attribute_id = nil)
+  path = ''
+  # Class segment: 0x20 (8-bit) or 0x21 (16-bit)
+  # Instance segment: 0x24 (8-bit) or 0x25 (16-bit)
+  # Attribute segment: 0x30 (8-bit) or 0x31 (16-bit)
+end
+```
+
+**Known CIP Classes:**
+| Class | Name | Instances | Key Attributes |
+|-------|------|-----------|----------------|
+| 0x01 | Identity | 1 | Vendor ID, Device Type, Serial |
+| 0x02 | Message Router | 1 | Object List |
+| 0x04 | Assembly | 100-105, 150-151 | Data |
+| 0x06 | Connection Manager | 1 | Open Requests |
+| 0xF4 | Port | 1-4 | Port Type, Number |
+| 0xF5 | TCP/IP Interface | 1 | Config, Hostname |
+| 0xF6 | Ethernet Link | 1-4 | Speed, MAC, Counters |
+
+### Module Actions
+
+| Action | Purpose | Risk Level |
+|--------|---------|------------|
+| KNOWN_OBJECTS | Scan documented CIP classes only | Low |
+| ENUMERATE_CLASSES | Scan class ID range | Medium |
+| ENUMERATE_INSTANCES | Scan instance range for class | Medium |
+| ENUMERATE_ATTRIBUTES | Scan attribute range | Medium |
+| FULL_ENUMERATION | Comprehensive scan | High |
+
+### Safety Features
+
+1. **Prominent Warning Display:**
+   ```
+   ======================================================================
+     CIP OBJECT ENUMERATION - FOR AUTHORIZED LAB USE ONLY
+   ======================================================================
+   This module sends multiple CIP requests to enumerate objects.
+   Running against production systems may cause:
+     - Increased network traffic
+     - Device performance degradation
+     - Unexpected device behavior
+   ```
+
+2. **Rate Limiting:**
+   - Default DELAY = 100ms between requests
+   - Configurable via datastore option
+   - `sleep(datastore['DELAY'] / 1000.0)` between each request
+
+3. **Graceful Error Handling:**
+   - 40+ CIP status codes defined
+   - Non-existent objects reported without crashing
+   - Session cleanup on exit (unregister_session)
+
+### Lessons Learned
+
+1. **CIP requires session for explicit messaging**
+   - List Identity (0x0063) works without session
+   - Send RR Data (0x006F) requires registered session
+   - Always unregister session on cleanup
+
+2. **CIP path segments are variable length**
+   - 8-bit values: 0x20/0x24/0x30 prefix
+   - 16-bit values: 0x21/0x25/0x31 prefix with padding
+   - Path size is in words (2 bytes)
+
+3. **Default to safest option**
+   - KNOWN_OBJECTS as default action
+   - Only scans well-documented classes
+   - Users must explicitly choose more aggressive scans
+
+---
+
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.2 Enhancement)
+
+### Context
+User testing revealed that enip_scanner.rb FULL_SCAN action only provided List Identity data, not additional network configuration. Enhancement requested to add CIP explicit messaging for comprehensive network info retrieval.
+
+### Issue Identified
+FULL_SCAN action was calling only action_list_identity() with a placeholder comment for future CIP expansion. This provided no additional value over LIST_IDENTITY action alone.
+
+### Solution Implemented (Option A)
+Enhanced enip_scanner.rb with CIP session support by copying session management code from enip_bruteforce.rb and adding network info retrieval functions.
+
+### Implementation Details
+
+**CIP Session Functions Added (~100 lines):**
+- `register_session()` - Register Session command 0x0065
+- `unregister_session()` - Unregister Session command 0x0066
+- `build_cip_path()` - Build class/instance/attribute path segments
+- `build_cip_request()` - Wrap CIP in Send RR Data (0x006F)
+- `send_cip_request()` - Send request and parse CIP response
+- `get_attribute()` - Get Attribute Single (service 0x0E)
+
+**Network Info Parsing Functions (~50 lines):**
+- `parse_interface_config()` - Parse TCP/IP Interface Attr 5 (IP/Subnet/Gateway)
+- `parse_hostname()` - Parse TCP/IP Interface Attr 6 (length-prefixed string)
+- `parse_mac_address()` - Parse Ethernet Link Attr 3 (6 bytes)
+- `parse_interface_speed()` - Parse Ethernet Link Attr 1 (4-byte DWORD)
+
+**New Action Added:**
+- `NETWORK_INFO` - Read network configuration via CIP explicit messaging
+
+**Enhanced FULL_SCAN:**
+- Phase 1: List Identity (session-less, works with TCP or UDP)
+- Phase 2: Network Info via CIP (TCP only, skipped if UDP mode)
+
+**Constants Added:**
+```ruby
+CIP_GET_ATTRIBUTE_SINGLE = 0x0E
+CIP_TCP_IP_INTERFACE = 0xF5  # Class 0xF5
+CIP_ETHERNET_LINK = 0xF6     # Class 0xF6
+```
+
+### CIP Objects Queried
+
+| Object | Instance | Attribute | Data |
+|--------|----------|-----------|------|
+| TCP/IP Interface (0xF5) | 1 | 5 | IP, Subnet, Gateway |
+| TCP/IP Interface (0xF5) | 1 | 6 | Hostname |
+| Ethernet Link (0xF6) | 1 | 1 | Interface Speed |
+| Ethernet Link (0xF6) | 1 | 3 | MAC Address |
+
+### Technical Notes
+
+**IP Address Parsing:**
+- TCP/IP Interface Attribute 5 stores IP in little-endian byte order
+- Bytes reversed for display: `data[0, 4].bytes.reverse.join('.')`
+
+**Hostname Parsing:**
+- Attribute 6 is a CIP STRING (length-prefixed)
+- Format: 2-byte length (little-endian) + ASCII string
+
+### Decisions Made
+
+| Decision | Rationale |
+|----------|-----------|
+| Add NETWORK_INFO as separate action | Users may want network info without identity |
+| Skip CIP portion in UDP mode | CIP explicit messaging requires TCP session |
+| Reuse code from enip_bruteforce.rb | Avoid duplication, proven implementation |
+| Graceful degradation | Continue if some attributes fail to read |
+
+### Lessons Learned
+
+1. **Placeholder code should be flagged for future work**
+   - FULL_SCAN comment "Future expansion" should have been tracked
+   - Document feature gaps in testing checklist
+
+2. **List Identity has limited scope**
+   - Only provides device identity from session-less command
+   - Network config requires CIP explicit messaging
+   - Both data sources needed for comprehensive enumeration
+
+3. **Code reuse between related modules**
+   - enip_scanner.rb and enip_bruteforce.rb share CIP session code
+   - Could consider shared mixin in future refactoring
+
+---
+
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.4 Integration Testing)
+
+### Context
+Automated integration testing of all three Metasploit modules followed by manual user testing against CLICK PLC.
+
+### Automated Tests Performed
+
+1. **Ruby Syntax Validation**
+   - All three modules pass `ruby -c` syntax check
+   - Used Metasploit's embedded Ruby: `/snap/metasploit-framework/current/opt/metasploit-framework/embedded/bin/ruby`
+
+2. **Module Structure Verification**
+   - All modules inherit from `Msf::Auxiliary`
+   - All modules include required mixins: `Remote::Tcp`, `Report`, `Scanner`
+   - All modules define `initialize()` and `run_host()` methods
+   - All actions properly defined and routed
+
+3. **Database Reporting Verification**
+   - All `report_note()` calls use hash format (deprecation warning fixed)
+   - Data structures verified as hashes
+
+4. **Code Quality Checks**
+   - Error handling present in all modules (16-26 rescue/error handlers)
+   - Default actions set appropriately
+   - Default ports correct (502 for Modbus, 44818 for ENIP)
+
+### Issues Found and Fixed
+
+1. **Deprecation Warning in enip_bruteforce.rb**
+   - Issue: `report_note()` was being called with array data
+   - Error: "Using report_note with a non-hash data value is deprecated"
+   - Fix: Wrapped all arrays in hashes (e.g., `data: { objects: discovered, count: discovered.length }`)
+
+2. **Human-Readable Output in enip_bruteforce.rb**
+   - Issue: Known CIP attributes displayed as raw hex instead of meaningful values
+   - Fix: Added `interpret_known_attribute()` function
+   - Added `VENDOR_IDS` and `DEVICE_TYPES` lookup tables
+   - Identity Object now shows vendor name, device type name, product name string, revision as major.minor
+
+### Manual Testing Results (by User)
+
+| Module | Action | Result |
+|--------|--------|--------|
+| enip_scanner.rb | LIST_IDENTITY | SUCCESS |
+| enip_scanner.rb | NETWORK_INFO | SUCCESS |
+| enip_scanner.rb | FULL_SCAN | SUCCESS |
+| enip_bruteforce.rb | KNOWN_OBJECTS | SUCCESS |
+| modbus_click.rb | READ_DEVICE_INFO | SUCCESS |
+
+### Module Statistics
+
+| Module | Lines | Actions |
+|--------|-------|---------|
+| modbus_click.rb | 724 | 8 |
+| enip_scanner.rb | 1,961 | 3 |
+| enip_bruteforce.rb | 813 | 5 |
+
+---
+
+## Session: 2026-01-08 (Metasploit Modules - Phase 9.5 Documentation)
+
+### Context
+Final documentation updates for Metasploit modules.
+
+### Documentation Updated
+
+1. **USAGE.md**
+   - Fixed action name: `GET_NETWORK_INFO` → `NETWORK_INFO`
+   - Enhanced ENIP Brute Force examples with detailed scenarios:
+     - Class enumeration with range examples
+     - Instance enumeration for specific classes
+     - Attribute enumeration with TARGET_CLASS/TARGET_INSTANCE
+     - Common CIP Class Reference table (decimal and hex)
+   - Added explanatory text between examples
+
+2. **README.md**
+   - Enhanced Metasploit Quick Start section
+   - Added ENUMERATE_ATTRIBUTES example for brute force module
+   - Clarified action descriptions
+
+3. **PLAN.md**
+   - Updated Phase 9.4 with detailed test results
+   - Marked all integration testing tasks complete
+
+### Lessons Learned
+
+1. **Action names must match between code and documentation**
+   - Easy to document placeholder names that get changed during development
+   - Verify all action names with `grep "'Actions'" *.rb`
+
+2. **Examples should show progression from simple to complex**
+   - Start with safest option (KNOWN_OBJECTS)
+   - Show class enumeration, then instance, then attribute
+   - Include both decimal and hex class IDs for user convenience
+
+3. **CIP class IDs should be shown in both formats**
+   - Users may be familiar with either format
+   - Decimal: 1, 4, 245, 246
+   - Hex: 0x01, 0x04, 0xF5, 0xF6
+
+---
+
 ## Future Considerations
 
 Items that may be useful but are currently out of scope:
